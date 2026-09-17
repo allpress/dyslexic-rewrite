@@ -23,7 +23,7 @@
   const MIN_WORDS = 8;
   const DATE = /^(January|February|March|April|May|June|July|August|September|October|November|December) \d{1,2}, \d{4}$/;
   const AUD = /^(Public|Friends|Friends of friends|Only me|Custom|Friends except.*|Specific friends|Close Friends|Shared with.*|.*'s friends.*|Your friends.*)$/;
-  const TIME = /^\d{1,2}:\d{2} (AM|PM)$/;
+  const TIME = /^\d{1,2}:\d{2}[\s\u202f\u00a0]?(AM|PM)$/;
   const SKIP_ACTION = /shared a |wrote on|Shared from Instagram/;
 
   const main = document.querySelector('[role="main"]') || document.body;

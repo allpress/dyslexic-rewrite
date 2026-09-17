@@ -49,10 +49,19 @@ def _json_to_text(raw: str) -> str:
             txt = next((item[k] for k in _TEXT_KEYS if isinstance(item.get(k), str)), "")
         else:
             continue
-        txt = txt.strip()
+        lines = [ln.strip() for ln in txt.strip().split("\n")]
+        # drop trailing audience / timestamp lines that social-media exports leave behind
+        while lines and (_AUDIENCE_RE.match(lines[-1]) or _TIME_RE.match(lines[-1])):
+            lines.pop()
+        txt = "\n".join(lines).strip()
         if txt:
             paras.append(txt)
     return _normalise("\n\n".join(paras))
+
+
+_AUDIENCE_RE = re.compile(r"^(Public|Friends|Friends of friends|Only me|Custom|Shared with.*|Friends except.*|"
+                          r"Specific friends|Close Friends)$")
+_TIME_RE = re.compile(r"^\d{1,2}:\d{2}[\s  ]?(AM|PM)$")
 
 
 def _normalise(text: str) -> str:

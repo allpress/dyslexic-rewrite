@@ -18,3 +18,4 @@ samples/
 my-posts.json
 jenn*.json
 *.style.json
+profiles/*.json
