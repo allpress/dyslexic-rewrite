@@ -11,3 +11,10 @@ dysrewrite-feedback.json
 personal.json
 .venv/
 .DS_Store
+
+# private writing samples and learned personal profiles
+samples/
+*-posts.json
+my-posts.json
+jenn*.json
+*.style.json

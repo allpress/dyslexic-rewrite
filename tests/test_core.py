@@ -150,3 +150,30 @@ def test_html_contains_changes_and_feedback_hooks():
     html = to_html(res, load_profile("default"), title="t")
     assert 'class="w chg"' in html and 'data-orig="tear"' in html
     assert "Export feedback" in html and "dysrewrite-feedback.json" in html
+
+
+# ---- learn: json export + privacy ---------------------------------------------------------
+def test_learn_from_json_export_keeps_no_content(tmp_path):
+    import json as _json
+    from dyslexic_rewrite.learn import analyze_style
+    posts = [
+        {"date": "May 1, 2026", "body": "Finished the bookcase today!! It took forever but I love how it turned out. Doug helped with the trim."},
+        {"date": "May 2, 2026", "body": "Okay so the paint is drying and I can't stop looking at it... Zephyrina came over and said it looks amazing."},
+        {"date": "May 3, 2026", "body": "Is it weird that I want to redo the hallway now? Asking for a friend (me). Visit https://example.com/plan for pics."},
+    ] * 4
+    f = tmp_path / "posts.json"
+    f.write_text(_json.dumps({"items": posts}), encoding="utf-8")
+    from dyslexic_rewrite.io import read_text
+    text = read_text(f)
+    assert text.count("\n\n") == len(posts) - 1
+    rep = analyze_style([text])
+    d = rep.to_dict()
+    blob = _json.dumps(d)
+    # no sentences, names, URLs or numbers from the sample survive in the report
+    for leak in ("bookcase today", "Doug", "Zephyrina", "example.com", "May 1"):
+        assert leak not in blob
+    assert rep.sample_sentences >= 12 and rep.exclamation_rate > 0 and rep.question_rate > 0
+    assert "and" in rep.connectives
+    p = learn_profile([text], name="t", report=rep)
+    assert "zephyrina" not in p.vocabulary and "doug" not in p.vocabulary
+    assert "bookcase" in p.vocabulary

@@ -102,21 +102,45 @@ def rewrite(file, profile_name, out_dir, engine, formats, simplify_vocab, verbos
 @click.option("-b", "--base", default="default", show_default=True, help="Profile to start from")
 @click.option("-n", "--name", default="personal", show_default=True)
 @click.option("--audio", is_flag=True, help="Treat the samples as audio files and transcribe them locally first")
-def learn(samples, out_path, base, name, audio):
-    """Build a personal profile from the reader's own writing (or speech)."""
-    from .learn import learn_profile, transcribe
+@click.option("-r", "--report", "report_path", default=None,
+              help="Also write a style report (aggregate metadata only, no content) to this JSON path")
+def learn(samples, out_path, base, name, audio, report_path):
+    """Build a personal profile from the reader's own writing (or speech).
+
+    Reads .txt/.md/.html/.epub, or a .json export of posts (see scripts/export_facebook_posts.js).
+    Stores only aggregate metadata — never a sentence from the sample — so the raw sample
+    can be deleted afterwards.
+    """
+    from .learn import analyze_style, learn_profile, transcribe
     texts = []
     for s in samples:
         texts.append(transcribe(s) if audio else read_text(s))
-    profile = learn_profile(texts, base=base, name=name)
+    report = analyze_style(texts)
+    profile = learn_profile(texts, base=base, name=name, report=report)
     profile.save(out_path)
-    st = profile.style
-    click.echo(f"learned from {st.sample_words} words: median sentence {st.median_sentence_words:.0f} words, "
-               f"p75 {st.p75_sentence_words:.0f}, clause depth {st.clause_depth:.2f}, passive rate {st.passive_rate:.0%}, "
-               f"median word frequency {st.median_zipf:.2f}")
+    if report_path:
+        Path(report_path).write_text(json.dumps(report.to_dict(), indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    r = report
+    click.echo(f"learned from {r.sample_words} words, {r.sample_sentences} sentences, {r.sample_paragraphs} paragraphs")
+    click.echo(f"sentences: median {r.sentence_words_median:.0f} words, p75 {r.sentence_words_p75:.0f}, p90 {r.sentence_words_p90:.0f}; "
+               f"short {r.short_sentence_rate:.0%}, long {r.long_sentence_rate:.0%}, fragments {r.fragment_rate:.0%}")
+    click.echo(f"shape: {r.clauses_per_sentence:.2f} clauses/sentence, passive {r.passive_rate:.0%}, "
+               f"subject-first {r.subject_first_rate:.0%}, centre-embedded {r.centre_embedded_rate:.1%}, "
+               f"{r.comma_per_sentence:.2f} commas/sentence")
+    click.echo(f"words: mean {r.word_length_mean:.1f} letters, median frequency {r.word_zipf_median:.2f}, "
+               f"rare {r.rare_word_rate:.1%}, long {r.long_word_rate:.1%}, first-person {r.first_person_rate:.1f}/100")
+    click.echo(f"voice: exclamations {r.exclamation_rate:.0%} (multi {r.multi_exclaim_rate:.0%}), questions {r.question_rate:.0%}, "
+               f"ellipses {r.ellipsis_rate:.0%}, parentheses {r.parenthetical_rate:.0%}, emoji {r.emoji_per_sentence:.2f}/sentence, "
+               f"contractions {r.contraction_rate:.2f}/sentence")
+    top = ", ".join(f"{w} {c}" for w, c in list(r.sentence_starters.items())[:8])
+    click.echo(f"starts sentences with: {top}")
+    click.echo(f"connectives: {', '.join(f'{w} {c}' for w, c in list(r.connectives.items())[:8])}")
     click.echo(f"targets: max_sentence_words={profile.max_sentence_words}, min_zipf={profile.min_zipf}, "
-               f"vocabulary={len(profile.vocabulary)} words")
-    click.echo(f"wrote {out_path}")
+               f"vocabulary={len(profile.vocabulary)} words, safe heteronyms={len(profile.safe_words)}")
+    click.echo(f"wrote {out_path}" + (f" and {report_path}" if report_path else ""))
+    click.echo("The profile holds aggregate metadata only. You can delete the raw sample file(s) now:")
+    for s in samples:
+        click.echo(f"  rm {s}")
 
 
 # --------------------------------------------------------------------------------------
