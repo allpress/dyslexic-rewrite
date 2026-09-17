@@ -310,7 +310,7 @@ def _to_segments(cells: list[_Cell]) -> list:
 def _fix_breaks(segs: list) -> list:
     """Make sure text before a break ends in a period and text after starts capitalised."""
     out = []
-    for i, (k, v) in enumerate(segs):
+    for k, v in segs:
         if k == "break":
             # close the previous textual segment with a period
             j = len(out) - 1

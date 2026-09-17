@@ -4,8 +4,8 @@ Pipeline:  text -> analyze (find triggers) -> rewrite (defuse them) -> render (s
 Profiles:  general -> by dyslexia type -> tuned to one reader from their own writing and speech.
 """
 
-from .profile import ReaderProfile, load_profile
 from .analyze import analyze
+from .profile import ReaderProfile, load_profile
 from .rewrite.engine import rewrite
 
 __version__ = "0.1.0"

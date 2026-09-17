@@ -13,7 +13,7 @@ Everything stays on the reader's machine. Nothing here phones home.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from importlib import resources
 from pathlib import Path
 from typing import Any
@@ -95,7 +95,7 @@ class ReaderProfile:
         return d
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "ReaderProfile":
+    def from_dict(cls, d: dict[str, Any]) -> ReaderProfile:
         d = dict(d)
         style = d.pop("style", {}) or {}
         weights = {k: 1.0 for k in TRIGGER_KINDS}

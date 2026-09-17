@@ -9,7 +9,7 @@ point back at the first.
 
 from __future__ import annotations
 
-from ..nlp import load_data, is_content, zipf
+from ..nlp import is_content, load_data, zipf
 from .base import Trigger
 
 

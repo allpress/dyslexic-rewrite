@@ -10,7 +10,7 @@ from typing import Any
 _MODELS = {"en": "en_core_web_sm"}
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def get_nlp(language: str = "en"):
     import spacy
 
@@ -44,7 +44,7 @@ except Exception:  # pragma: no cover
     pass
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def load_data(name: str) -> dict[str, Any]:
     path = resources.files("dyslexic_rewrite").joinpath("data", name)
     return json.loads(path.read_text(encoding="utf-8"))

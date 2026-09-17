@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 import sys
 
-from ..analyze import analyze, Report
+from ..analyze import Report, analyze
 from ..profile import ReaderProfile
 from ..protect import find_protected
 from .model import Paragraph, RewriteResult, SentenceRewrite
@@ -56,7 +56,7 @@ def rewrite(text: str, profile: ReaderProfile | None = None, engine: str = "rule
             continue
 
         if engine == "llm":
-            from .llm import rewrite_paragraph_llm, diff_segments
+            from .llm import diff_segments, rewrite_paragraph_llm
             p_text = text[p_start:p_end].strip()
             p_trig = [t for i, _ in p_sents for t in trig_by_sent.get(i, [])]
             p_prot = [p for p in protected if p.start >= p_start and p.end <= p_end]

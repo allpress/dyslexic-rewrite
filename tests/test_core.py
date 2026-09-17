@@ -1,12 +1,12 @@
 
 import pytest
 
-from dyslexic_rewrite import analyze, rewrite, load_profile
-from dyslexic_rewrite.profile import ReaderProfile, BUILTIN_PROFILES
+from dyslexic_rewrite import analyze, load_profile, rewrite
 from dyslexic_rewrite.learn import learn_profile
-from dyslexic_rewrite.render import to_html
-from dyslexic_rewrite.protect import find_protected, check_fidelity
 from dyslexic_rewrite.nlp import get_nlp
+from dyslexic_rewrite.profile import BUILTIN_PROFILES, ReaderProfile
+from dyslexic_rewrite.protect import check_fidelity, find_protected
+from dyslexic_rewrite.render import to_html
 
 
 def kinds(report, kind):
@@ -155,6 +155,7 @@ def test_html_contains_changes_and_feedback_hooks():
 # ---- learn: json export + privacy ---------------------------------------------------------
 def test_learn_from_json_export_keeps_no_content(tmp_path):
     import json as _json
+
     from dyslexic_rewrite.learn import analyze_style
     posts = [
         {"date": "May 1, 2026", "body": "Finished the bookcase today!! It took forever but I love how it turned out. Doug helped with the trim."},

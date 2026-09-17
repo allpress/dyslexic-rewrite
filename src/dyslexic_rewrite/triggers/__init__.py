@@ -1,6 +1,11 @@
 from .base import Trigger
 from .lexical import (
-    detect_heteronyms, detect_phrasal, detect_ambiguity, detect_personal, detect_rare, detect_long,
+    detect_ambiguity,
+    detect_heteronyms,
+    detect_long,
+    detect_personal,
+    detect_phrasal,
+    detect_rare,
 )
 from .phonetic import detect_phonetic
 from .syntax import detect_syntax
