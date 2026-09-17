@@ -28,7 +28,8 @@ The plan, in three layers that share one profile format:
 The reading-test site lives in this repo too: `server/` (FastAPI, Postgres, email-code sign-in) and `web/`
 (React + TypeScript). It runs the same engine and adds the A/B reading test: two matched passages, one
 original and one rewritten with your profile, timed, with five questions each, plus "tap the word that
-tripped you". Results feed your profile. See `server/API.md` and `web/README.md`.
+tripped you". Results feed your profile. See `server/API.md` and `web/README.md`. The hosted version lives
+at https://unwindwords.com.
 
 ```bash
 # local dev: Postgres on localhost, then

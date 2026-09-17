@@ -259,6 +259,116 @@ export const rewrite = (text: string) => post<RewriteResponse>('/rewrite', { tex
 export const postFeedback = (body: { tripped: string[]; safe?: string[] }) =>
   post<{ profile: ProfileSummary }>('/feedback', body);
 
+/* ------------------------------------------------------ voice recordings */
+
+export type RecordingKind = 'read_aloud' | 'free_speech';
+
+export interface Prompt {
+  id: string;
+  kind: RecordingKind;
+  title: string;
+  text: string;
+  words: number;
+}
+
+export type RecordingStatus = 'pending_analysis' | 'analyzing' | 'analyzed' | 'failed';
+
+export interface Recording {
+  id: string;
+  created_at: string;
+  kind: RecordingKind;
+  prompt_id: string | null;
+  prompt_title: string | null;
+  seconds: number | null;
+  bytes: number;
+  mime: string;
+  status: RecordingStatus;
+  note: string | null;
+}
+
+export interface RecordingTotals {
+  count: number;
+  seconds: number;
+  bytes: number;
+}
+
+export interface RecordingsResponse {
+  recordings: Recording[];
+  totals: RecordingTotals;
+}
+
+export const getReadAloudPrompts = () => request<Prompt[]>('/read-aloud-prompts');
+
+export const getRecordings = () => request<RecordingsResponse>('/me/recordings');
+
+export const deleteRecording = (id: string) =>
+  request<{ ok: true }>(`/me/recordings/${encodeURIComponent(id)}`, { method: 'DELETE' });
+
+/** Own recordings only; the browser sends the session cookie along with an <audio> request. */
+export function recordingAudioUrl(id: string): string {
+  return `/api/me/recordings/${encodeURIComponent(id)}/audio`;
+}
+
+export interface UploadRecordingBody {
+  file: Blob;
+  filename: string;
+  kind: RecordingKind;
+  prompt_id?: string;
+  seconds?: number;
+}
+
+/**
+ * POST /api/me/recordings as multipart form data, via XHR so we get real upload
+ * progress (fetch cannot report request-body progress). onProgress gets a 0..1 fraction.
+ */
+export function uploadRecording(
+  body: UploadRecordingBody,
+  onProgress?: (fraction: number) => void,
+): Promise<Recording> {
+  return new Promise((resolve, reject) => {
+    const form = new FormData();
+    form.append('file', body.file, body.filename);
+    form.append('kind', body.kind);
+    if (body.prompt_id) form.append('prompt_id', body.prompt_id);
+    if (body.seconds !== undefined) form.append('seconds', String(Math.round(body.seconds)));
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/me/recordings');
+    xhr.withCredentials = true;
+
+    if (onProgress) {
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) onProgress(e.loaded / e.total);
+      };
+    }
+
+    xhr.onload = () => {
+      let payload: unknown = null;
+      try {
+        payload = xhr.responseText ? JSON.parse(xhr.responseText) : null;
+      } catch {
+        payload = null;
+      }
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(payload as Recording);
+        return;
+      }
+      const message =
+        (payload && typeof payload === 'object' && 'error' in payload
+          ? String((payload as { error: unknown }).error)
+          : '') || `Something went wrong (${xhr.status}).`;
+      if (xhr.status === 401 && onUnauthorized) onUnauthorized();
+      reject(new ApiError(xhr.status, message));
+    };
+
+    xhr.onerror = () => {
+      reject(new ApiError(0, 'The upload failed. Check your connection and try again.'));
+    };
+
+    xhr.send(form);
+  });
+}
+
 /* -------------------------------------------------------------- health */
 
 export const getHealth = () => request<{ ok: true; version: string }>('/health');

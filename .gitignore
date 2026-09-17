@@ -21,3 +21,6 @@ jenn*.json
 profiles/*.json
 web/node_modules/
 web/dist/
+
+# locally stored voice recordings (AUDIO_DIR default)
+data/

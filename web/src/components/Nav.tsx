@@ -8,7 +8,7 @@ export default function Nav() {
     <nav className="nav" aria-label="Main">
       <div className="nav__inner">
         <Link to="/" className="nav__logo">
-          Dyslexic Rewrite
+          Unwind Words
         </Link>
         {!loading && user ? (
           <>
@@ -17,6 +17,9 @@ export default function Nav() {
             </NavLink>
             <NavLink to="/read" className="nav__link">
               Read
+            </NavLink>
+            <NavLink to="/record" className="nav__link">
+              Record
             </NavLink>
             <NavLink to="/results" className="nav__link">
               Results

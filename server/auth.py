@@ -21,8 +21,8 @@ from . import db
 
 SECRET = os.environ.get("SESSION_SECRET") or ("dev-secret-" + hashlib.sha256(b"dysrewrite").hexdigest()[:16])
 RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
-FROM_EMAIL = os.environ.get("LOGIN_FROM_EMAIL", "login@example.com")
-APP_NAME = os.environ.get("APP_NAME", "Dyslexic Rewrite")
+FROM_EMAIL = os.environ.get("LOGIN_FROM_EMAIL", "login@unwindwords.com")
+APP_NAME = os.environ.get("APP_NAME", "Unwind Words")
 CODE_TTL = timedelta(minutes=10)
 SESSION_MAX_AGE = 60 * 60 * 24 * 90  # 90 days
 COOKIE = "session"

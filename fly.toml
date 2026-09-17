@@ -1,5 +1,5 @@
 # Fly.io app config. Provisioned by .github/workflows/provision.yml; deployed by deploy.yml.
-app = "dyslexic-rewrite"
+app = "unwindwords"
 primary_region = "ord"
 
 [build]
@@ -7,8 +7,13 @@ primary_region = "ord"
 
 [env]
   PORT = "8080"
-  APP_NAME = "Dyslexic Rewrite"
+  APP_NAME = "Unwind Words"
   SECURE_COOKIES = "1"
+  AUDIO_DIR = "/data/recordings"
+
+[mounts]
+  source = "audio"
+  destination = "/data"
 
 [http_service]
   internal_port = 8080

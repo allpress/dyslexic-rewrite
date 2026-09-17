@@ -13,17 +13,22 @@ jobs:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
       - name: Create app (idempotent)
-        run: flyctl apps create dyslexic-rewrite --org personal || true
+        run: flyctl apps create unwindwords --org personal || true
         env: { FLY_API_TOKEN: "${{ secrets.FLY_API_TOKEN }}" }
       - name: Create Postgres (idempotent) and attach
         run: |
-          flyctl postgres create --name dyslexic-rewrite-db --region "${{ github.event.inputs.region }}" \
+          flyctl postgres create --name unwindwords-db --region "${{ github.event.inputs.region }}" \
             --initial-cluster-size 1 --vm-size shared-cpu-1x --volume-size 1 --org personal || true
-          flyctl postgres attach dyslexic-rewrite-db --app dyslexic-rewrite --database-name dysrewrite || true
+          flyctl postgres attach unwindwords-db --app unwindwords --database-name dysrewrite || true
+        env: { FLY_API_TOKEN: "${{ secrets.FLY_API_TOKEN }}" }
+      - name: Create audio volume (idempotent)
+        run: |
+          flyctl volumes create audio --app unwindwords --region "${{ github.event.inputs.region }}" \
+            --size 3 --yes || true
         env: { FLY_API_TOKEN: "${{ secrets.FLY_API_TOKEN }}" }
       - name: Set secrets
         run: |
-          flyctl secrets set --app dyslexic-rewrite --stage \
+          flyctl secrets set --app unwindwords --stage \
             SESSION_SECRET="$(openssl rand -hex 32)" \
             RESEND_API_KEY="${{ secrets.RESEND_API_KEY }}" \
             LOGIN_FROM_EMAIL="${{ vars.LOGIN_FROM_EMAIL || 'login@example.com' }}"

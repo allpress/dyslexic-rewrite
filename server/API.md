@@ -69,3 +69,44 @@ profile; which one is rewritten is randomised per test. The reader never sees th
 ## Health
 
 `GET /api/health` → `{ok: true, version}`
+
+---
+
+# Voice recordings (v0.2)
+
+People speak more naturally than they write, so a spoken sample is often a truer picture of how
+someone's language works than their typing is. The site therefore lets a signed-in reader record or
+upload audio. **The site does no analysis.** Every upload lands in `pending_analysis` and stays there
+until an offline pipeline (built separately) picks it up. No transcription, no model, no background job.
+
+Privacy: audio is a person's voice, so it is theirs. It is stored only against their own account, only
+they can play it back, `DELETE` removes the row and the file, and deleting the account deletes every
+recording and file with it.
+
+| Method | Path | Body | Returns |
+| --- | --- | --- | --- |
+| GET | `/api/read-aloud-prompts` | — | `[Prompt]` — short passages to read aloud, plus free-speech suggestions |
+| POST | `/api/me/recordings` | multipart: `file` (audio), `kind`, `prompt_id?`, `seconds?` | `Recording` (201) |
+| GET | `/api/me/recordings` | — | `{recordings: [Recording], totals: {count, seconds, bytes}}` |
+| GET | `/api/me/recordings/{id}/audio` | — | the audio bytes (`Content-Type` as uploaded), own recordings only |
+| DELETE | `/api/me/recordings/{id}` | — | `{ok: true}` |
+
+`Prompt` = `{id, kind: "read_aloud"|"free_speech", title, text, words}`
+ - `read_aloud`: a passage to read out; `text` is the passage.
+ - `free_speech`: a question to answer in their own words (e.g. "Tell us about a room you changed");
+   `text` is the question, `words` is 0.
+
+`Recording` = `{id, created_at, kind, prompt_id|null, prompt_title|null, seconds|null, bytes, mime,
+status: "pending_analysis"|"analyzing"|"analyzed"|"failed", note|null}`
+
+Rules the server enforces:
+- Signed in only. A reader may only list, play and delete their own recordings.
+- `kind` must be `read_aloud` or `free_speech`; `prompt_id` must exist when given.
+- Accepted types: `audio/webm`, `audio/ogg`, `audio/mp4`, `audio/mpeg`, `audio/wav`, `audio/x-m4a`,
+  `audio/aac`, `audio/flac` (extension is derived from the type).
+- At most 25 MB and 15 minutes per recording; at most 50 recordings per account.
+- `status` is always `pending_analysis` on create. Nothing in the web app ever changes it; the offline
+  pipeline does that directly in the database.
+
+Storage: files are written to `AUDIO_DIR` (default `./data/recordings`), one file per recording named
+`<user_id>/<uuid>.<ext>`. On Fly that directory lives on a mounted volume. Nothing else reads it.

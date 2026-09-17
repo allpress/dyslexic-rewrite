@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from fastapi import Depends, FastAPI, HTTPException, Request, Response
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -17,9 +17,9 @@ from pydantic import BaseModel, Field
 from dyslexic_rewrite import __version__
 from dyslexic_rewrite.profile import BUILTIN_PROFILES
 
-from . import auth, db, passages, service
+from . import auth, db, passages, prompts, service, storage
 
-app = FastAPI(title="Dyslexic Rewrite", version=__version__, docs_url=None, redoc_url=None)
+app = FastAPI(title="Unwind Words", version=__version__, docs_url=None, redoc_url=None)
 SECURE_COOKIES = os.environ.get("SECURE_COOKIES", "1") == "1"
 WEB_DIST = Path(os.environ.get("WEB_DIST", Path(__file__).resolve().parent.parent / "web" / "dist"))
 
@@ -200,9 +200,10 @@ def me_triggers(body: TriggersIn, u: dict = Depends(current_user)):
 @app.delete("/api/me")
 def delete_me(response: Response, u: dict = Depends(current_user)):
     with db.conn() as c:
-        c.execute("DELETE FROM users WHERE id = %s", (u["id"],))  # cascades to profile, tests, items
+        c.execute("DELETE FROM users WHERE id = %s", (u["id"],))  # cascades to profile, tests, items, recordings
         c.execute("DELETE FROM login_codes WHERE email = %s", (u["email"],))
         c.commit()
+    storage.delete_user(u["id"])
     response.delete_cookie(auth.COOKIE, path="/")
     return {"ok": True}
 
@@ -391,6 +392,107 @@ def rewrite_any(body: TextIn, u: dict | None = Depends(optional_user)):
 def feedback(body: FeedbackIn, u: dict = Depends(current_user)):
     p = service.update_triggers(u["id"], u["base_profile"], add=body.tripped, safe=body.safe)
     return {"profile": service.profile_summary(p, u["base_profile"])}
+
+
+# ---------------------------------------------------------------------------------------
+# voice recordings (the site stores audio only; an offline pipeline analyses it)
+# ---------------------------------------------------------------------------------------
+RECORDING_KINDS = {"read_aloud", "free_speech"}
+MAX_RECORDING_BYTES = 25 * 1024 * 1024
+MAX_RECORDING_SECONDS = 15 * 60
+MAX_RECORDINGS_PER_USER = 50
+MIME_EXTENSIONS = {
+    "audio/webm": "webm", "audio/ogg": "ogg", "audio/mp4": "mp4", "audio/mpeg": "mp3",
+    "audio/wav": "wav", "audio/x-m4a": "m4a", "audio/aac": "aac", "audio/flac": "flac",
+}
+
+
+def _recording_json(r: dict) -> dict:
+    prompt = prompts.PROMPTS_BY_ID.get(r["prompt_id"]) if r["prompt_id"] else None
+    return {"id": r["id"], "created_at": r["created_at"].isoformat(), "kind": r["kind"],
+            "prompt_id": r["prompt_id"], "prompt_title": prompt["title"] if prompt else None,
+            "seconds": r["seconds"], "bytes": r["bytes"], "mime": r["mime"], "status": r["status"],
+            "note": r["note"]}
+
+
+@app.get("/api/read-aloud-prompts")
+def read_aloud_prompts():
+    return prompts.all_prompts()
+
+
+@app.post("/api/me/recordings", status_code=201)
+def create_recording(
+    file: UploadFile = File(...),
+    kind: str = Form(...),
+    prompt_id: str | None = Form(default=None),
+    seconds: float | None = Form(default=None),
+    u: dict = Depends(current_user),
+):
+    if kind not in RECORDING_KINDS:
+        raise HTTPException(400, f"kind must be one of {sorted(RECORDING_KINDS)}.")
+    if prompt_id and prompt_id not in prompts.PROMPTS_BY_ID:
+        raise HTTPException(400, "That prompt doesn't exist.")
+    ext = MIME_EXTENSIONS.get(file.content_type or "")
+    if not ext:
+        raise HTTPException(400, "That audio type isn't supported. Try recording again.")
+    if seconds is not None and seconds > MAX_RECORDING_SECONDS:
+        raise HTTPException(400, "Recordings can be at most 15 minutes.")
+    data = file.file.read()
+    if len(data) > MAX_RECORDING_BYTES:
+        raise HTTPException(400, "Recordings can be at most 25 MB.")
+    if not data:
+        raise HTTPException(400, "That recording came through empty. Try again.")
+    with db.conn() as c:
+        count = c.execute("SELECT COUNT(*) AS n FROM recordings WHERE user_id = %s", (u["id"],)).fetchone()["n"]
+        if count >= MAX_RECORDINGS_PER_USER:
+            raise HTTPException(400, "You've reached the limit of 50 recordings. Delete one to add another.")
+        key = storage.save(u["id"], data, ext)
+        row = c.execute(
+            "INSERT INTO recordings (user_id, kind, prompt_id, seconds, bytes, mime, storage_key) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING *",
+            (u["id"], kind, prompt_id, seconds, len(data), file.content_type, key),
+        ).fetchone()
+        c.commit()
+    return _recording_json(row)
+
+
+@app.get("/api/me/recordings")
+def list_recordings(u: dict = Depends(current_user)):
+    with db.conn() as c:
+        rows = c.execute(
+            "SELECT * FROM recordings WHERE user_id = %s ORDER BY created_at DESC", (u["id"],),
+        ).fetchall()
+    totals = {"count": len(rows), "seconds": sum(r["seconds"] or 0 for r in rows), "bytes": sum(r["bytes"] for r in rows)}
+    return {"recordings": [_recording_json(r) for r in rows], "totals": totals}
+
+
+@app.get("/api/me/recordings/{recording_id}/audio")
+def recording_audio(recording_id: int, u: dict = Depends(current_user)):
+    with db.conn() as c:
+        r = c.execute(
+            "SELECT * FROM recordings WHERE id = %s AND user_id = %s", (recording_id, u["id"]),
+        ).fetchone()
+    if not r:
+        raise HTTPException(404, "No such recording.")
+    try:
+        with storage.open_file(r["storage_key"]) as f:
+            data = f.read()
+    except (ValueError, FileNotFoundError, OSError):
+        raise HTTPException(404, "No such recording.")
+    return Response(content=data, media_type=r["mime"], headers={"Content-Disposition": "inline"})
+
+
+@app.delete("/api/me/recordings/{recording_id}")
+def delete_recording(recording_id: int, u: dict = Depends(current_user)):
+    with db.conn() as c:
+        r = c.execute(
+            "DELETE FROM recordings WHERE id = %s AND user_id = %s RETURNING storage_key", (recording_id, u["id"]),
+        ).fetchone()
+        c.commit()
+    if not r:
+        raise HTTPException(404, "No such recording.")
+    storage.delete(r["storage_key"])
+    return {"ok": True}
 
 
 # ---------------------------------------------------------------------------------------

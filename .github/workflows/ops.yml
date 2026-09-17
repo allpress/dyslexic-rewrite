@@ -13,6 +13,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
-      - run: flyctl ${{ github.event.inputs.command }} --app dyslexic-rewrite
+      - run: flyctl ${{ github.event.inputs.command }} --app unwindwords
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

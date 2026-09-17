@@ -9,6 +9,7 @@ import Onboarding from './pages/Onboarding';
 import TestPage from './pages/Test';
 import Results from './pages/Results';
 import ReadAnything from './pages/Read';
+import Record from './pages/Record';
 import Profile from './pages/Profile';
 import NotFound from './pages/NotFound';
 
@@ -59,6 +60,14 @@ export default function App() {
           }
         />
         <Route path="/read" element={<ReadAnything />} />
+        <Route
+          path="/record"
+          element={
+            <RequireAuth>
+              <Record />
+            </RequireAuth>
+          }
+        />
         <Route
           path="/profile"
           element={

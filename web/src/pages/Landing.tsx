@@ -14,6 +14,9 @@ export default function Landing() {
           Long sentences bend and fold. Rare words snag. We straighten the shape of a sentence and
           swap the words that trip you up. The meaning stays the same.
         </p>
+        <p className="muted">
+          Unwind Words — because one tangled word can stop a whole sentence, and we untangle it.
+        </p>
       </header>
 
       <section aria-labelledby="example-heading" className="stack">
@@ -73,6 +76,10 @@ export default function Landing() {
             </span>
           </li>
         </ol>
+        <p className="muted">
+          You can also read a short passage aloud or answer a question in your own words — speech
+          often shows how you naturally use language more clearly than typing does.
+        </p>
       </section>
 
       <section aria-labelledby="free-heading" className="notice">

@@ -1,4 +1,4 @@
-# Dyslexic Rewrite — web front end
+# Unwind Words — web front end
 
 Vite + React 18 + TypeScript. No UI framework: one stylesheet (`src/styles.css`).
 
