@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dyslexic-rewrite"
+version = "0.1.0"
+description = "Free, open-source tool that rewrites text so dyslexic readers can read it faster — general first, then tuned to the individual."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Doug Allpress" }]
+keywords = ["dyslexia", "accessibility", "reading", "nlp", "text-simplification"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: End Users/Desktop",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Topic :: Text Processing :: Linguistic",
+]
+dependencies = [
+  "spacy>=3.7",
+  "wordfreq>=3.0",
+  "jellyfish>=1.0",
+  "click>=8.1",
+]
+
+[project.optional-dependencies]
+epub = ["ebooklib>=0.18", "beautifulsoup4>=4.12"]
+wordnet = ["nltk>=3.8"]
+llm = ["httpx>=0.27"]
+speech = ["faster-whisper>=1.0"]
+dev = ["pytest>=8", "ruff>=0.5"]
+all = ["dyslexic-rewrite[epub,wordnet,llm,dev]"]
+
+[project.scripts]
+dysrewrite = "dyslexic_rewrite.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/allpress/dyslexic-rewrite"
+Issues = "https://github.com/allpress/dyslexic-rewrite/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+dyslexic_rewrite = ["data/*.json", "profiles/*.json", "templates/*.html"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"

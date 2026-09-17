@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+dysrewrite_out/
+*.feedback.json
+dysrewrite-feedback.json
+personal.json
+.venv/
+.DS_Store

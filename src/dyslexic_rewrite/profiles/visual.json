@@ -1,0 +1,35 @@
+{
+  "name": "visual",
+  "language": "en",
+  "description": "Visual-attentional profile: letters and words move or crowd. Long words, visually similar words and dense layout weigh more; the reader view uses bigger spacing and shorter lines.",
+  "max_sentence_words": 18,
+  "min_zipf": 3.3,
+  "max_word_length": 10,
+  "phonetic_window_sentences": 1,
+  "ambiguity_window_sentences": 3,
+  "weights": {
+    "heteronym": 0.9,
+    "ambiguity": 0.9,
+    "phrasal": 0.8,
+    "phonetic": 1.4,
+    "rare": 0.8,
+    "long": 1.5,
+    "syntax": 0.9,
+    "personal": 2.0
+  },
+  "trigger_words": [],
+  "safe_words": [],
+  "replacements": {},
+  "vocabulary": [],
+  "layout": {
+    "font_size_px": 22,
+    "line_height": 2.1,
+    "letter_spacing_em": 0.06,
+    "word_spacing_em": 0.22,
+    "max_line_chars": 52,
+    "paragraph_gap_em": 1.6,
+    "background": "#fbf8f1",
+    "text": "#1f2328",
+    "highlight_changes": true
+  }
+}

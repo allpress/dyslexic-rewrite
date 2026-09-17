@@ -1,0 +1,24 @@
+{
+  "name": "default",
+  "language": "en",
+  "description": "General profile: balanced weights that help most dyslexic readers. Start here.",
+  "max_sentence_words": 20,
+  "min_zipf": 3.3,
+  "max_word_length": 12,
+  "phonetic_window_sentences": 1,
+  "ambiguity_window_sentences": 3,
+  "weights": {
+    "heteronym": 1.0,
+    "ambiguity": 1.0,
+    "phrasal": 1.0,
+    "phonetic": 1.0,
+    "rare": 0.7,
+    "long": 0.6,
+    "syntax": 0.9,
+    "personal": 2.0
+  },
+  "trigger_words": [],
+  "safe_words": [],
+  "replacements": {},
+  "vocabulary": []
+}

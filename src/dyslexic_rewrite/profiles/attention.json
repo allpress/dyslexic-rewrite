@@ -1,0 +1,24 @@
+{
+  "name": "attention",
+  "language": "en",
+  "description": "Attention / working-memory profile: long or embedded sentences lose the reader. Sentence splitting and de-embedding weigh most; vocabulary is left mostly alone.",
+  "max_sentence_words": 14,
+  "min_zipf": 3.3,
+  "max_word_length": 12,
+  "phonetic_window_sentences": 1,
+  "ambiguity_window_sentences": 3,
+  "weights": {
+    "heteronym": 1.0,
+    "ambiguity": 1.2,
+    "phrasal": 1.0,
+    "phonetic": 0.8,
+    "rare": 0.6,
+    "long": 0.6,
+    "syntax": 1.6,
+    "personal": 2.0
+  },
+  "trigger_words": [],
+  "safe_words": [],
+  "replacements": {},
+  "vocabulary": []
+}

@@ -1,0 +1,1744 @@
+{
+ "_about": "English heteronyms and multi-sense words that commonly trip dyslexic readers. Each entry maps a spaCy coarse POS tag to plain-word alternatives, most preferred first. An EMPTY list means: flag it and show the hint, but never auto-substitute (usually because that POS still has two senses). '_hint' gives a pronunciation or stress cue per POS. Phrasal verbs carry 'object': 'no' (idiom only without a direct object), 'yes' (only with one), 'any'. Contributions welcome — keep alternatives common, short, and meaning-preserving.",
+ "words": {
+  "wind": {
+   "VERB": [
+    "twist",
+    "turn",
+    "coil"
+   ],
+   "NOUN": [],
+   "_hint": {
+    "VERB": "rhymes with 'find'",
+    "NOUN": "rhymes with 'pinned'"
+   }
+  },
+  "tear": {
+   "VERB": [
+    "rip"
+   ],
+   "NOUN": [],
+   "_hint": {
+    "VERB": "rhymes with 'air' (rip)",
+    "NOUN": "rhymes with 'ear' (teardrop) or 'air' (rip)"
+   }
+  },
+  "lead": {
+   "VERB": [
+    "guide",
+    "head"
+   ],
+   "NOUN": [],
+   "_hint": {
+    "VERB": "rhymes with 'need'",
+    "NOUN": "'led' if it is the metal; 'leed' if it means being in front"
+   }
+  },
+  "read": {
+   "VERB": [],
+   "NOUN": [],
+   "_hint": {
+    "VERB": "'reed' now, 'red' in the past"
+   }
+  },
+  "live": {
+   "VERB": [],
+   "ADJ": [
+    "living",
+    "real-time"
+   ],
+   "_hint": {
+    "VERB": "rhymes with 'give'",
+    "ADJ": "rhymes with 'five'"
+   }
+  },
+  "close": {
+   "VERB": [
+    "shut"
+   ],
+   "ADJ": [],
+   "ADV": [],
+   "_hint": {
+    "VERB": "ends with a 'z' sound (shut)",
+    "ADJ": "ends with an 's' sound (near)",
+    "ADV": "ends with an 's' sound (near)"
+   }
+  },
+  "bow": {
+   "VERB": [
+    "bend forward"
+   ],
+   "NOUN": [],
+   "_hint": {
+    "VERB": "rhymes with 'cow'",
+    "NOUN": "rhymes with 'cow' (bend) or 'go' (ribbon, archery)"
+   }
+  },
+  "bass": {
+   "NOUN": [],
+   "_hint": {
+    "NOUN": "'base' (music) or 'bass' rhyming with 'mass' (fish)"
+   }
+  },
+  "desert": {
+   "VERB": [
+    "abandon",
+    "leave"
+   ],
+   "NOUN": [],
+   "_hint": {
+    "VERB": "stress on -SERT (abandon)",
+    "NOUN": "stress on DES- (dry land)"
+   }
+  },
+  "dove": {
+   "VERB": [
+    "dived"
+   ],
+   "NOUN": [],
+   "_hint": {
+    "VERB": "rhymes with 'stove' (dived)",
+    "NOUN": "rhymes with 'love' (bird)"
+   }
+  },
+  "minute": {
+   "ADJ": [
+    "tiny",
+    "very small"
+   ],
+   "NOUN": [],
+   "_hint": {
+    "ADJ": "my-NOOT (tiny)",
+    "NOUN": "MIN-it (60 seconds)"
+   }
+  },
+  "object": {
+   "VERB": [
+    "protest",
+    "argue against"
+   ],
+   "NOUN": [],
+   "_hint": {
+    "VERB": "ob-JECT (protest)",
+    "NOUN": "OB-ject (thing)"
+   }
+  },
+  "present": {
+   "VERB": [
+    "show",
+    "give"
+   ],
+   "NOUN": [],
+   "ADJ": [],
+   "_hint": {
+    "VERB": "pre-SENT (give, show)",
+    "NOUN": "PRES-ent (gift, now)",
+    "ADJ": "PRES-ent (here, current)"
+   }
+  },
+  "produce": {
+   "VERB": [
+    "make",
+    "create"
+   ],
+   "NOUN": [
+    "fruit and vegetables"
+   ],
+   "_hint": {
+    "VERB": "pro-DUCE (make)",
+    "NOUN": "PRO-duce (fruit and veg)"
+   }
+  },
+  "project": {
+   "VERB": [],
+   "NOUN": [
+    "plan",
+    "task"
+   ],
+   "_hint": {
+    "VERB": "pro-JECT",
+    "NOUN": "PROJ-ect"
+   }
+  },
+  "record": {
+   "VERB": [
+    "write down",
+    "log"
+   ],
+   "NOUN": [],
+   "_hint": {
+    "VERB": "re-CORD (write down)",
+    "NOUN": "REC-ord (a log, a disc)"
+   }
+  },
+  "refuse": {
+   "VERB": [
+    "decline",
+    "say no"
+   ],
+   "NOUN": [
+    "trash",
+    "waste"
+   ],
+   "_hint": {
+    "VERB": "re-FUSE (say no)",
+    "NOUN": "REF-use (trash)"
+   }
+  },
+  "row": {
+   "VERB": [
+    "paddle"
+   ],
+   "NOUN": [],
+   "_hint": {
+    "VERB": "rhymes with 'go' (paddle)",
+    "NOUN": "rhymes with 'go' (line) or 'cow' (argument)"
+   }
+  },
+  "sow": {
+   "VERB": [
+    "plant"
+   ],
+   "NOUN": [
+    "female pig"
+   ],
+   "_hint": {
+    "VERB": "rhymes with 'go' (plant)",
+    "NOUN": "rhymes with 'cow' (pig)"
+   }
+  },
+  "wound": {
+   "VERB": [],
+   "NOUN": [
+    "injury",
+    "cut"
+   ],
+   "_hint": {
+    "VERB": "rhymes with 'found' (past of wind)",
+    "NOUN": "'woond' (injury)"
+   }
+  },
+  "content": {
+   "ADJ": [
+    "happy",
+    "satisfied"
+   ],
+   "NOUN": [],
+   "_hint": {
+    "ADJ": "con-TENT (happy)",
+    "NOUN": "CON-tent (what is inside)"
+   }
+  },
+  "contract": {
+   "VERB": [],
+   "NOUN": [
+    "agreement",
+    "deal"
+   ],
+   "_hint": {
+    "VERB": "con-TRACT (shrink, catch)",
+    "NOUN": "CON-tract (agreement)"
+   }
+  },
+  "convert": {
+   "VERB": [
+    "change",
+    "turn into"
+   ],
+   "NOUN": [],
+   "_hint": {
+    "VERB": "con-VERT",
+    "NOUN": "CON-vert"
+   }
+  },
+  "permit": {
+   "VERB": [
+    "allow",
+    "let"
+   ],
+   "NOUN": [
+    "license",
+    "pass"
+   ],
+   "_hint": {
+    "VERB": "per-MIT (allow)",
+    "NOUN": "PER-mit (license)"
+   }
+  },
+  "polish": {
+   "VERB": [
+    "shine",
+    "buff"
+   ],
+   "NOUN": [
+    "shine"
+   ],
+   "_hint": {
+    "VERB": "'POL-ish' (shine); 'POH-lish' means from Poland"
+   }
+  },
+  "subject": {
+   "VERB": [],
+   "NOUN": [
+    "topic"
+   ],
+   "ADJ": [
+    "likely"
+   ],
+   "_hint": {
+    "VERB": "sub-JECT",
+    "NOUN": "SUB-ject (topic)",
+    "ADJ": "SUB-ject"
+   }
+  },
+  "use": {
+   "VERB": [],
+   "NOUN": [],
+   "_hint": {
+    "VERB": "ends with a 'z' sound",
+    "NOUN": "ends with an 's' sound"
+   }
+  },
+  "excuse": {
+   "VERB": [
+    "forgive",
+    "let off"
+   ],
+   "NOUN": [
+    "reason"
+   ],
+   "_hint": {
+    "VERB": "ends with a 'z' sound (forgive)",
+    "NOUN": "ends with an 's' sound (reason)"
+   }
+  },
+  "house": {
+   "VERB": [
+    "hold",
+    "shelter"
+   ],
+   "NOUN": [
+    "home"
+   ],
+   "_hint": {
+    "VERB": "ends with a 'z' sound (shelter)",
+    "NOUN": "ends with an 's' sound (home)"
+   }
+  },
+  "invalid": {
+   "ADJ": [
+    "not valid",
+    "void"
+   ],
+   "NOUN": [
+    "sick person"
+   ],
+   "_hint": {
+    "ADJ": "in-VAL-id (not valid)",
+    "NOUN": "IN-va-lid (sick person)"
+   }
+  },
+  "moped": {
+   "VERB": [
+    "sulked"
+   ],
+   "NOUN": [
+    "scooter"
+   ],
+   "_hint": {
+    "VERB": "'mohpt' (sulked)",
+    "NOUN": "'MO-ped' (scooter)"
+   }
+  },
+  "number": {
+   "ADJ": [
+    "more numb"
+   ],
+   "NOUN": [],
+   "_hint": {
+    "ADJ": "'NUM-er' (more numb)",
+    "NOUN": "'NUM-ber'"
+   }
+  },
+  "progress": {
+   "VERB": [
+    "move ahead",
+    "advance"
+   ],
+   "NOUN": [
+    "headway"
+   ],
+   "_hint": {
+    "VERB": "pro-GRESS",
+    "NOUN": "PROG-ress"
+   }
+  },
+  "rebel": {
+   "VERB": [
+    "rise up",
+    "resist"
+   ],
+   "NOUN": [],
+   "_hint": {
+    "VERB": "re-BEL",
+    "NOUN": "REB-el"
+   }
+  },
+  "resume": {
+   "VERB": [
+    "continue",
+    "restart"
+   ],
+   "NOUN": [
+    "CV"
+   ],
+   "_hint": {
+    "VERB": "re-ZOOM (continue)",
+    "NOUN": "REZ-oo-may (CV)"
+   }
+  },
+  "separate": {
+   "VERB": [
+    "split",
+    "divide"
+   ],
+   "ADJ": [
+    "different",
+    "apart"
+   ],
+   "_hint": {
+    "VERB": "SEP-a-rate (split)",
+    "ADJ": "SEP-rit (apart)"
+   }
+  },
+  "suspect": {
+   "VERB": [],
+   "NOUN": [],
+   "ADJ": [
+    "doubtful"
+   ],
+   "_hint": {
+    "VERB": "sus-PECT (think)",
+    "NOUN": "SUS-pect (person)",
+    "ADJ": "SUS-pect (doubtful)"
+   }
+  },
+  "conduct": {
+   "VERB": [],
+   "NOUN": [
+    "behaviour"
+   ],
+   "_hint": {
+    "VERB": "con-DUCT",
+    "NOUN": "CON-duct (behaviour)"
+   }
+  },
+  "conflict": {
+   "VERB": [
+    "clash"
+   ],
+   "NOUN": [
+    "fight",
+    "clash"
+   ],
+   "_hint": {
+    "VERB": "con-FLICT",
+    "NOUN": "CON-flict"
+   }
+  },
+  "console": {
+   "VERB": [
+    "comfort"
+   ],
+   "NOUN": [],
+   "_hint": {
+    "VERB": "con-SOLE (comfort)",
+    "NOUN": "CON-sole (panel)"
+   }
+  },
+  "digest": {
+   "VERB": [
+    "break down",
+    "absorb"
+   ],
+   "NOUN": [
+    "summary"
+   ],
+   "_hint": {
+    "VERB": "di-GEST",
+    "NOUN": "DI-gest (summary)"
+   }
+  },
+  "entrance": {
+   "VERB": [
+    "enchant",
+    "captivate"
+   ],
+   "NOUN": [
+    "way in",
+    "doorway"
+   ],
+   "_hint": {
+    "VERB": "en-TRANCE (enchant)",
+    "NOUN": "EN-trance (way in)"
+   }
+  },
+  "escort": {
+   "VERB": [
+    "accompany",
+    "walk with"
+   ],
+   "NOUN": [
+    "companion"
+   ],
+   "_hint": {
+    "VERB": "es-CORT",
+    "NOUN": "ES-cort"
+   }
+  },
+  "increase": {
+   "VERB": [
+    "grow",
+    "go up"
+   ],
+   "NOUN": [
+    "rise",
+    "growth"
+   ],
+   "_hint": {
+    "VERB": "in-CREASE",
+    "NOUN": "IN-crease"
+   }
+  },
+  "decrease": {
+   "VERB": [
+    "shrink",
+    "go down"
+   ],
+   "NOUN": [
+    "drop",
+    "fall"
+   ],
+   "_hint": {
+    "VERB": "de-CREASE",
+    "NOUN": "DE-crease"
+   }
+  },
+  "insult": {
+   "VERB": [
+    "offend"
+   ],
+   "NOUN": [
+    "put-down"
+   ],
+   "_hint": {
+    "VERB": "in-SULT",
+    "NOUN": "IN-sult"
+   }
+  },
+  "intimate": {
+   "VERB": [
+    "hint",
+    "suggest"
+   ],
+   "ADJ": [],
+   "_hint": {
+    "VERB": "IN-ti-mate (hint)",
+    "ADJ": "IN-ti-mit (close)"
+   }
+  },
+  "perfect": {
+   "VERB": [
+    "improve",
+    "refine"
+   ],
+   "ADJ": [
+    "flawless",
+    "ideal"
+   ],
+   "_hint": {
+    "VERB": "per-FECT (improve)",
+    "ADJ": "PER-fect (flawless)"
+   }
+  },
+  "protest": {
+   "VERB": [
+    "object",
+    "complain"
+   ],
+   "NOUN": [
+    "demonstration"
+   ],
+   "_hint": {
+    "VERB": "pro-TEST",
+    "NOUN": "PRO-test"
+   }
+  },
+  "upset": {
+   "VERB": [
+    "disturb",
+    "trouble"
+   ],
+   "ADJ": [
+    "troubled",
+    "unhappy"
+   ],
+   "NOUN": [
+    "surprise loss"
+   ],
+   "_hint": {
+    "VERB": "up-SET",
+    "ADJ": "up-SET",
+    "NOUN": "UP-set"
+   }
+  },
+  "attribute": {
+   "VERB": [
+    "credit"
+   ],
+   "NOUN": [
+    "quality",
+    "trait"
+   ],
+   "_hint": {
+    "VERB": "a-TRIB-ute",
+    "NOUN": "AT-tri-bute"
+   }
+  },
+  "combine": {
+   "VERB": [
+    "join",
+    "mix"
+   ],
+   "NOUN": [
+    "harvester"
+   ],
+   "_hint": {
+    "VERB": "com-BINE",
+    "NOUN": "COM-bine (harvester)"
+   }
+  },
+  "compound": {
+   "VERB": [
+    "worsen",
+    "add to"
+   ],
+   "NOUN": [
+    "mixture"
+   ],
+   "_hint": {
+    "VERB": "com-POUND",
+    "NOUN": "COM-pound"
+   }
+  },
+  "address": {
+   "VERB": [],
+   "NOUN": [],
+   "_hint": {
+    "VERB": "ad-DRESS",
+    "NOUN": "AD-dress or ad-DRESS"
+   }
+  },
+  "affect": {
+   "VERB": [
+    "change",
+    "influence"
+   ],
+   "NOUN": [
+    "mood"
+   ],
+   "_hint": {
+    "VERB": "a-FECT (influence)",
+    "NOUN": "AF-fect (mood)"
+   }
+  },
+  "alternate": {
+   "VERB": [
+    "take turns",
+    "switch"
+   ],
+   "ADJ": [
+    "other",
+    "every other"
+   ],
+   "_hint": {
+    "VERB": "AL-ter-nate (take turns)",
+    "ADJ": "AL-ter-nit (other)"
+   }
+  },
+  "estimate": {
+   "VERB": [
+    "guess",
+    "judge"
+   ],
+   "NOUN": [
+    "guess",
+    "rough figure"
+   ],
+   "_hint": {
+    "VERB": "ES-ti-mate",
+    "NOUN": "ES-ti-mit"
+   }
+  },
+  "graduate": {
+   "VERB": [
+    "finish school"
+   ],
+   "NOUN": [],
+   "_hint": {
+    "VERB": "GRAD-u-ate",
+    "NOUN": "GRAD-u-it"
+   }
+  },
+  "moderate": {
+   "VERB": [
+    "tone down",
+    "host"
+   ],
+   "ADJ": [
+    "mild",
+    "medium"
+   ],
+   "_hint": {
+    "VERB": "MOD-er-ate",
+    "ADJ": "MOD-er-it"
+   }
+  },
+  "advocate": {
+   "VERB": [
+    "support",
+    "argue for"
+   ],
+   "NOUN": [
+    "supporter"
+   ],
+   "_hint": {
+    "VERB": "AD-vo-cate",
+    "NOUN": "AD-vo-kit"
+   }
+  },
+  "does": {
+   "VERB": [],
+   "NOUN": [
+    "female deer"
+   ],
+   "_hint": {
+    "VERB": "'duz'",
+    "NOUN": "'doze' (female deer)"
+   }
+  },
+  "sewer": {
+   "NOUN": [],
+   "_hint": {
+    "NOUN": "'SOO-er' (drain) or 'SO-er' (one who sews)"
+   }
+  },
+  "axes": {
+   "NOUN": [],
+   "_hint": {
+    "NOUN": "'AX-iz' (tools) or 'AX-eez' (lines on a graph)"
+   }
+  },
+  "buffet": {
+   "VERB": [
+    "batter",
+    "knock about"
+   ],
+   "NOUN": [],
+   "_hint": {
+    "VERB": "BUF-fit (batter)",
+    "NOUN": "buf-FAY (meal)"
+   }
+  },
+  "learned": {
+   "VERB": [],
+   "ADJ": [
+    "scholarly",
+    "wise"
+   ],
+   "_hint": {
+    "VERB": "'lernd'",
+    "ADJ": "'LER-ned' (scholarly)"
+   }
+  },
+  "second": {
+   "VERB": [],
+   "ADJ": [],
+   "NOUN": []
+  },
+  "fine": {
+   "VERB": [
+    "penalise",
+    "charge"
+   ],
+   "ADJ": [],
+   "NOUN": [
+    "penalty"
+   ]
+  },
+  "kind": {
+   "ADJ": [
+    "caring",
+    "gentle"
+   ],
+   "NOUN": [
+    "type",
+    "sort"
+   ]
+  },
+  "left": {
+   "VERB": [],
+   "ADJ": [],
+   "NOUN": []
+  },
+  "light": {
+   "ADJ": [],
+   "NOUN": [],
+   "VERB": [
+    "ignite",
+    "brighten"
+   ]
+  },
+  "right": {
+   "ADJ": [],
+   "NOUN": [],
+   "ADV": []
+  },
+  "saw": {
+   "VERB": [],
+   "NOUN": [
+    "hand saw"
+   ]
+  },
+  "well": {
+   "ADV": [],
+   "NOUN": [
+    "water well"
+   ],
+   "ADJ": [
+    "healthy"
+   ]
+  },
+  "bear": {
+   "VERB": [],
+   "NOUN": []
+  },
+  "duck": {
+   "VERB": [
+    "dodge",
+    "crouch"
+   ],
+   "NOUN": []
+  },
+  "fly": {
+   "VERB": [],
+   "NOUN": [
+    "housefly"
+   ]
+  },
+  "match": {
+   "VERB": [
+    "fit",
+    "go with"
+   ],
+   "NOUN": []
+  },
+  "park": {
+   "VERB": [
+    "pull over",
+    "leave the car"
+   ],
+   "NOUN": []
+  },
+  "rock": {
+   "VERB": [
+    "sway",
+    "shake"
+   ],
+   "NOUN": []
+  },
+  "watch": {
+   "VERB": [
+    "look at",
+    "keep an eye on"
+   ],
+   "NOUN": [
+    "wristwatch"
+   ]
+  },
+  "spring": {
+   "VERB": [
+    "jump",
+    "leap"
+   ],
+   "NOUN": []
+  },
+  "fall": {
+   "VERB": [
+    "drop",
+    "tumble"
+   ],
+   "NOUN": []
+  },
+  "mean": {
+   "VERB": [],
+   "ADJ": [
+    "cruel",
+    "unkind"
+   ],
+   "NOUN": [
+    "average"
+   ]
+  },
+  "date": {
+   "VERB": [
+    "go out with"
+   ],
+   "NOUN": []
+  },
+  "bank": {
+   "NOUN": [],
+   "VERB": [
+    "rely",
+    "count"
+   ]
+  },
+  "bark": {
+   "NOUN": [],
+   "VERB": [
+    "yap",
+    "snap"
+   ]
+  },
+  "seal": {
+   "VERB": [
+    "close",
+    "shut tight"
+   ],
+   "NOUN": []
+  },
+  "sink": {
+   "VERB": [],
+   "NOUN": [
+    "basin"
+   ]
+  },
+  "stalk": {
+   "VERB": [
+    "follow",
+    "creep after"
+   ],
+   "NOUN": [
+    "stem"
+   ]
+  },
+  "ring": {
+   "VERB": [],
+   "NOUN": []
+  },
+  "trip": {
+   "VERB": [
+    "stumble"
+   ],
+   "NOUN": [
+    "journey"
+   ]
+  },
+  "leaves": {
+   "VERB": [
+    "goes",
+    "departs"
+   ],
+   "NOUN": []
+  },
+  "back": {
+   "VERB": [
+    "support"
+   ],
+   "NOUN": [],
+   "ADV": []
+  },
+  "long": {
+   "VERB": [
+    "yearn",
+    "wish"
+   ],
+   "ADJ": [],
+   "ADV": []
+  },
+  "last": {
+   "VERB": [
+    "continue",
+    "go on"
+   ],
+   "ADJ": [],
+   "ADV": []
+  },
+  "like": {
+   "VERB": [
+    "enjoy"
+   ],
+   "ADP": [],
+   "SCONJ": [
+    "as if"
+   ]
+  },
+  "still": {
+   "ADV": [],
+   "ADJ": [],
+   "VERB": [
+    "calm"
+   ]
+  },
+  "even": {
+   "ADV": [],
+   "ADJ": [
+    "level",
+    "equal"
+   ],
+   "VERB": [
+    "level out"
+   ]
+  },
+  "type": {
+   "VERB": [
+    "key in"
+   ],
+   "NOUN": [
+    "kind",
+    "sort"
+   ]
+  },
+  "train": {
+   "VERB": [
+    "practise",
+    "coach"
+   ],
+   "NOUN": []
+  },
+  "ground": {
+   "VERB": [
+    "crushed",
+    "milled"
+   ],
+   "NOUN": []
+  },
+  "plant": {
+   "VERB": [
+    "put in the ground",
+    "sow"
+   ],
+   "NOUN": []
+  }
+ },
+ "phrasal_verbs": {
+  "wind up": {
+   "alts": [
+    "end up",
+    "finish"
+   ],
+   "object": "no"
+  },
+  "wind down": {
+   "alts": [
+    "slow down",
+    "relax"
+   ],
+   "object": "no"
+  },
+  "tear up": {
+   "alts": [
+    "rip up"
+   ],
+   "object": "yes"
+  },
+  "tear down": {
+   "alts": [
+    "pull down",
+    "demolish"
+   ],
+   "object": "yes"
+  },
+  "put up with": {
+   "alts": [
+    "tolerate",
+    "stand"
+   ],
+   "object": "yes"
+  },
+  "put off": {
+   "alts": [
+    "delay",
+    "postpone"
+   ],
+   "object": "yes"
+  },
+  "put out": {
+   "alts": [
+    "extinguish",
+    "publish"
+   ],
+   "object": "yes"
+  },
+  "turn up": {
+   "alts": [
+    "arrive",
+    "show up"
+   ],
+   "object": "no"
+  },
+  "turn down": {
+   "alts": [
+    "refuse",
+    "lower"
+   ],
+   "object": "no"
+  },
+  "turn in": {
+   "alts": [
+    "hand in",
+    "go to bed"
+   ],
+   "object": "no"
+  },
+  "take off": {
+   "alts": [
+    "remove",
+    "leave"
+   ],
+   "object": "no"
+  },
+  "take in": {
+   "alts": [
+    "absorb",
+    "shelter"
+   ],
+   "object": "yes"
+  },
+  "take on": {
+   "alts": [
+    "accept",
+    "hire"
+   ],
+   "object": "yes"
+  },
+  "bring up": {
+   "alts": [
+    "mention",
+    "raise"
+   ],
+   "object": "yes"
+  },
+  "make up": {
+   "alts": [
+    "invent",
+    "reconcile"
+   ],
+   "object": "yes"
+  },
+  "make out": {
+   "alts": [
+    "see",
+    "understand"
+   ],
+   "object": "no"
+  },
+  "give up": {
+   "alts": [
+    "quit",
+    "surrender"
+   ],
+   "object": "no"
+  },
+  "give in": {
+   "alts": [
+    "surrender",
+    "yield"
+   ],
+   "object": "no"
+  },
+  "run into": {
+   "alts": [
+    "meet",
+    "bump into"
+   ],
+   "object": "yes"
+  },
+  "run out": {
+   "alts": [
+    "use up"
+   ],
+   "object": "no"
+  },
+  "look up": {
+   "alts": [
+    "search for",
+    "find"
+   ],
+   "object": "yes"
+  },
+  "look into": {
+   "alts": [
+    "investigate",
+    "examine"
+   ],
+   "object": "yes"
+  },
+  "carry on": {
+   "alts": [
+    "continue",
+    "keep going"
+   ],
+   "object": "no"
+  },
+  "carry out": {
+   "alts": [
+    "do",
+    "perform"
+   ],
+   "object": "yes"
+  },
+  "set up": {
+   "alts": [
+    "arrange",
+    "establish"
+   ],
+   "object": "yes"
+  },
+  "set off": {
+   "alts": [
+    "leave",
+    "trigger"
+   ],
+   "object": "no"
+  },
+  "hold up": {
+   "alts": [
+    "delay",
+    "rob"
+   ],
+   "object": "yes"
+  },
+  "hold on": {
+   "alts": [
+    "wait",
+    "grip"
+   ],
+   "object": "no"
+  },
+  "go on": {
+   "alts": [
+    "continue",
+    "happen"
+   ],
+   "object": "no"
+  },
+  "go off": {
+   "alts": [
+    "explode",
+    "leave"
+   ],
+   "object": "no"
+  },
+  "get over": {
+   "alts": [
+    "recover from"
+   ],
+   "object": "yes"
+  },
+  "get on": {
+   "alts": [
+    "board",
+    "cope"
+   ],
+   "object": "no"
+  },
+  "work out": {
+   "alts": [
+    "figure out",
+    "exercise"
+   ],
+   "object": "no"
+  },
+  "pick up": {
+   "alts": [
+    "collect",
+    "lift"
+   ],
+   "object": "yes"
+  },
+  "come across": {
+   "alts": [
+    "find",
+    "seem"
+   ],
+   "object": "no"
+  },
+  "come up with": {
+   "alts": [
+    "think of",
+    "invent"
+   ],
+   "object": "yes"
+  },
+  "pass out": {
+   "alts": [
+    "faint",
+    "hand out"
+   ],
+   "object": "no"
+  },
+  "pass away": {
+   "alts": [
+    "die"
+   ],
+   "object": "no"
+  },
+  "call off": {
+   "alts": [
+    "cancel"
+   ],
+   "object": "yes"
+  },
+  "back up": {
+   "alts": [
+    "support",
+    "reverse"
+   ],
+   "object": "yes"
+  },
+  "break down": {
+   "alts": [
+    "fail",
+    "collapse",
+    "sort into parts"
+   ],
+   "object": "no"
+  },
+  "break up": {
+   "alts": [
+    "end",
+    "split"
+   ],
+   "object": "no"
+  },
+  "check out": {
+   "alts": [
+    "look at",
+    "leave"
+   ],
+   "object": "no"
+  },
+  "cut down": {
+   "alts": [
+    "reduce",
+    "fell"
+   ],
+   "object": "yes"
+  },
+  "do up": {
+   "alts": [
+    "fasten",
+    "renovate"
+   ],
+   "object": "yes"
+  },
+  "figure out": {
+   "alts": [
+    "understand",
+    "solve"
+   ],
+   "object": "yes"
+  },
+  "fill in": {
+   "alts": [
+    "complete",
+    "inform"
+   ],
+   "object": "yes"
+  },
+  "find out": {
+   "alts": [
+    "learn",
+    "discover"
+   ],
+   "object": "yes"
+  },
+  "hang out": {
+   "alts": [
+    "spend time"
+   ],
+   "object": "no"
+  },
+  "keep up": {
+   "alts": [
+    "continue",
+    "maintain"
+   ],
+   "object": "no"
+  },
+  "let down": {
+   "alts": [
+    "disappoint"
+   ],
+   "object": "yes"
+  },
+  "point out": {
+   "alts": [
+    "show",
+    "mention"
+   ],
+   "object": "yes"
+  },
+  "show up": {
+   "alts": [
+    "arrive",
+    "appear"
+   ],
+   "object": "no"
+  },
+  "stand for": {
+   "alts": [
+    "mean",
+    "represent"
+   ],
+   "object": "yes"
+  },
+  "throw up": {
+   "alts": [
+    "vomit",
+    "build quickly"
+   ],
+   "object": "no"
+  },
+  "wear out": {
+   "alts": [
+    "exhaust",
+    "use up"
+   ],
+   "object": "yes"
+  }
+ },
+ "confusable_pairs": [
+  [
+   "from",
+   "form"
+  ],
+  [
+   "quiet",
+   "quite"
+  ],
+  [
+   "through",
+   "though"
+  ],
+  [
+   "through",
+   "thorough"
+  ],
+  [
+   "though",
+   "thought"
+  ],
+  [
+   "where",
+   "were"
+  ],
+  [
+   "were",
+   "we're"
+  ],
+  [
+   "then",
+   "than"
+  ],
+  [
+   "lose",
+   "loose"
+  ],
+  [
+   "affect",
+   "effect"
+  ],
+  [
+   "accept",
+   "except"
+  ],
+  [
+   "their",
+   "there"
+  ],
+  [
+   "there",
+   "they're"
+  ],
+  [
+   "your",
+   "you're"
+  ],
+  [
+   "its",
+   "it's"
+  ],
+  [
+   "to",
+   "too"
+  ],
+  [
+   "too",
+   "two"
+  ],
+  [
+   "weather",
+   "whether"
+  ],
+  [
+   "which",
+   "witch"
+  ],
+  [
+   "whose",
+   "who's"
+  ],
+  [
+   "advice",
+   "advise"
+  ],
+  [
+   "breath",
+   "breathe"
+  ],
+  [
+   "choose",
+   "chose"
+  ],
+  [
+   "cloth",
+   "clothes"
+  ],
+  [
+   "conscious",
+   "conscience"
+  ],
+  [
+   "dessert",
+   "desert"
+  ],
+  [
+   "ensure",
+   "insure"
+  ],
+  [
+   "farther",
+   "further"
+  ],
+  [
+   "lay",
+   "lie"
+  ],
+  [
+   "passed",
+   "past"
+  ],
+  [
+   "principal",
+   "principle"
+  ],
+  [
+   "stationary",
+   "stationery"
+  ],
+  [
+   "complement",
+   "compliment"
+  ],
+  [
+   "council",
+   "counsel"
+  ],
+  [
+   "cite",
+   "site"
+  ],
+  [
+   "site",
+   "sight"
+  ],
+  [
+   "bare",
+   "bear"
+  ],
+  [
+   "brake",
+   "break"
+  ],
+  [
+   "peace",
+   "piece"
+  ],
+  [
+   "plain",
+   "plane"
+  ],
+  [
+   "right",
+   "write"
+  ],
+  [
+   "sea",
+   "see"
+  ],
+  [
+   "wait",
+   "weight"
+  ],
+  [
+   "weak",
+   "week"
+  ],
+  [
+   "hole",
+   "whole"
+  ],
+  [
+   "hear",
+   "here"
+  ],
+  [
+   "knew",
+   "new"
+  ],
+  [
+   "know",
+   "no"
+  ],
+  [
+   "one",
+   "won"
+  ],
+  [
+   "made",
+   "maid"
+  ],
+  [
+   "mail",
+   "male"
+  ],
+  [
+   "meat",
+   "meet"
+  ],
+  [
+   "pair",
+   "pear"
+  ],
+  [
+   "rain",
+   "reign"
+  ],
+  [
+   "road",
+   "rode"
+  ],
+  [
+   "role",
+   "roll"
+  ],
+  [
+   "sale",
+   "sail"
+  ],
+  [
+   "some",
+   "sum"
+  ],
+  [
+   "son",
+   "sun"
+  ],
+  [
+   "steal",
+   "steel"
+  ],
+  [
+   "tail",
+   "tale"
+  ],
+  [
+   "threw",
+   "through"
+  ],
+  [
+   "waist",
+   "waste"
+  ],
+  [
+   "war",
+   "wore"
+  ],
+  [
+   "way",
+   "weigh"
+  ],
+  [
+   "wind",
+   "wined"
+  ],
+  [
+   "wind",
+   "wend"
+  ],
+  [
+   "dairy",
+   "diary"
+  ],
+  [
+   "angel",
+   "angle"
+  ],
+  [
+   "trail",
+   "trial"
+  ],
+  [
+   "united",
+   "untied"
+  ],
+  [
+   "scared",
+   "sacred"
+  ],
+  [
+   "casual",
+   "causal"
+  ],
+  [
+   "being",
+   "begin"
+  ],
+  [
+   "was",
+   "saw"
+  ],
+  [
+   "on",
+   "no"
+  ],
+  [
+   "of",
+   "off"
+  ],
+  [
+   "for",
+   "four"
+  ],
+  [
+   "by",
+   "buy"
+  ],
+  [
+   "bye",
+   "buy"
+  ]
+ ]
+}

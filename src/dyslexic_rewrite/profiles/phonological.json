@@ -1,0 +1,24 @@
+{
+  "name": "phonological",
+  "language": "en",
+  "description": "Phonological profile: sound-based confusion dominates. Near-homophones, heteronyms and rare words weigh more; sentence length matters less.",
+  "max_sentence_words": 20,
+  "min_zipf": 3.6,
+  "max_word_length": 12,
+  "phonetic_window_sentences": 2,
+  "ambiguity_window_sentences": 3,
+  "weights": {
+    "heteronym": 1.5,
+    "ambiguity": 1.3,
+    "phrasal": 1.2,
+    "phonetic": 1.6,
+    "rare": 1.1,
+    "long": 0.8,
+    "syntax": 0.6,
+    "personal": 2.0
+  },
+  "trigger_words": [],
+  "safe_words": [],
+  "replacements": {},
+  "vocabulary": []
+}
