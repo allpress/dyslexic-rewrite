@@ -1,0 +1,18 @@
+name: Ops
+# Run a flyctl command against the app from the Actions tab (logs, status, secrets, ssh console commands).
+on:
+  workflow_dispatch:
+    inputs:
+      command:
+        description: "flyctl args, e.g. 'status' or 'logs --no-tail' or 'secrets list'"
+        required: true
+        default: status
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - run: flyctl ${{ github.event.inputs.command }} --app dyslexic-rewrite
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

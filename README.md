@@ -23,7 +23,24 @@ The plan, in three layers that share one profile format:
 | **By type** | Built-in profiles that shift the weights: `phonological`, `visual`, `attention`. | v0.1 — first cut |
 | **Individual** | `dysrewrite learn` builds a profile from the reader's own writing (or a transcript of their speech): their sentence length, clause depth, passive use, vocabulary. Feedback from the reader view (“this word tripped me”) feeds back in. | v0.1 — first cut |
 
-## Install
+## The website
+
+The reading-test site lives in this repo too: `server/` (FastAPI, Postgres, email-code sign-in) and `web/`
+(React + TypeScript). It runs the same engine and adds the A/B reading test: two matched passages, one
+original and one rewritten with your profile, timed, with five questions each, plus "tap the word that
+tripped you". Results feed your profile. See `server/API.md` and `web/README.md`.
+
+```bash
+# local dev: Postgres on localhost, then
+pip install -e ".[all]" -r server/requirements.txt && python -m spacy download en_core_web_sm
+(cd web && npm install && npm run build)
+SECURE_COOKIES=0 uvicorn server.app:app --reload     # http://localhost:8000 — sign-in codes print on screen
+```
+
+Deploys go to Fly.io from GitHub Actions (`.github/workflows/deploy.yml`); `provision.yml` creates the app,
+Postgres and secrets once; `ops.yml` runs any `flyctl` command from the Actions tab.
+
+## Install (command line)
 
 ```bash
 pip install dyslexic-rewrite            # once published; for now:

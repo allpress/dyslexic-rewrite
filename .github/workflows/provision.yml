@@ -1,0 +1,30 @@
+name: Provision (one-time)
+# Creates the Fly app, a Postgres, and sets secrets. Run once from the Actions tab.
+on:
+  workflow_dispatch:
+    inputs:
+      region:
+        description: Fly region
+        default: ord
+jobs:
+  provision:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Create app (idempotent)
+        run: flyctl apps create dyslexic-rewrite --org personal || true
+        env: { FLY_API_TOKEN: "${{ secrets.FLY_API_TOKEN }}" }
+      - name: Create Postgres (idempotent) and attach
+        run: |
+          flyctl postgres create --name dyslexic-rewrite-db --region "${{ github.event.inputs.region }}" \
+            --initial-cluster-size 1 --vm-size shared-cpu-1x --volume-size 1 --org personal || true
+          flyctl postgres attach dyslexic-rewrite-db --app dyslexic-rewrite --database-name dysrewrite || true
+        env: { FLY_API_TOKEN: "${{ secrets.FLY_API_TOKEN }}" }
+      - name: Set secrets
+        run: |
+          flyctl secrets set --app dyslexic-rewrite --stage \
+            SESSION_SECRET="$(openssl rand -hex 32)" \
+            RESEND_API_KEY="${{ secrets.RESEND_API_KEY }}" \
+            LOGIN_FROM_EMAIL="${{ vars.LOGIN_FROM_EMAIL || 'login@example.com' }}"
+        env: { FLY_API_TOKEN: "${{ secrets.FLY_API_TOKEN }}" }

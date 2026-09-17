@@ -19,3 +19,36 @@ jobs:
       - run: python -m spacy download en_core_web_sm
       - run: ruff check src tests
       - run: pytest -q
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+        working-directory: web
+      - run: npm test -- --run
+        working-directory: web
+      - run: npm run build
+        working-directory: web
+  api:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env: { POSTGRES_PASSWORD: postgres, POSTGRES_DB: dysrewrite }
+        ports: ["5432:5432"]
+        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12", cache: pip }
+      - run: pip install -e ".[dev,epub]" -r server/requirements.txt
+      - run: python -m spacy download en_core_web_sm
+      - run: mkdir -p web/dist/assets && echo '<!doctype html><title>x</title>' > web/dist/index.html
+      - run: pytest -q tests/test_server.py
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/dysrewrite

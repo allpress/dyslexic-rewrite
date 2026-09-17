@@ -19,3 +19,5 @@ my-posts.json
 jenn*.json
 *.style.json
 profiles/*.json
+web/node_modules/
+web/dist/

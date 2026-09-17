@@ -1,0 +1,119 @@
+"""API tests. Need a Postgres at DATABASE_URL (or TEST_DATABASE_URL); skipped otherwise."""
+
+import json
+import os
+
+import pytest
+
+pytest.importorskip("fastapi")
+pytest.importorskip("psycopg")
+
+os.environ.setdefault("DATABASE_URL", os.environ.get("TEST_DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/dysrewrite"))
+os.environ["SECURE_COOKIES"] = "0"
+os.environ.pop("RESEND_API_KEY", None)
+
+try:
+    import psycopg
+    psycopg.connect(os.environ["DATABASE_URL"]).close()
+except Exception as e:  # pragma: no cover
+    pytest.skip(f"no Postgres for API tests: {e}", allow_module_level=True)
+
+from fastapi.testclient import TestClient  # noqa: E402
+
+from server.app import app  # noqa: E402
+
+EMAIL = "pytest-user@example.com"
+SAMPLE = ("I finished the shelves today!! Took forever but I love it. Marisol helped with the trim and we got "
+          "pizza after. Tomorrow I paint. Not sure about the colour yet, maybe the green? We'll see. Lol. ") * 12
+
+
+@pytest.fixture(scope="module")
+def client():
+    with TestClient(app) as c:
+        yield c
+        # clean up
+        c.delete("/api/me")
+
+
+@pytest.fixture(scope="module")
+def signed_in(client):
+    r = client.post("/api/auth/request-code", json={"email": EMAIL}).json()
+    assert r["ok"] and "dev_code" in r
+    bad = client.post("/api/auth/verify", json={"email": EMAIL, "code": "000000"})
+    assert bad.status_code == 400
+    ok = client.post("/api/auth/verify", json={"email": EMAIL, "code": r["dev_code"]})
+    assert ok.status_code == 200 and ok.json()["user"]["email"] == EMAIL
+    return client
+
+
+def test_health(client):
+    assert client.get("/api/health").json()["ok"] is True
+
+
+def test_me_requires_login(client):
+    assert client.get("/api/me").status_code == 401
+
+
+def test_onboarding_and_writing_sample_keeps_no_content(signed_in):
+    c = signed_in
+    u = c.patch("/api/me", json={"name": "Pat", "base_profile": "attention"}).json()["user"]
+    assert u["name"] == "Pat" and u["base_profile"] == "attention"
+    short = c.post("/api/me/writing-sample", json={"text": "too short"})
+    assert short.status_code == 400
+    r = c.post("/api/me/writing-sample", json={"text": SAMPLE})
+    assert r.status_code == 200
+    blob = json.dumps(r.json())
+    assert "Marisol" not in blob and "pizza after" not in blob and "shelves today" not in blob
+    assert r.json()["style"]["sample_sentences"] > 10
+    me = c.get("/api/me").json()
+    assert me["user"]["has_personal_profile"] and me["profile"]["style"]["sample_words"] > 0
+
+
+def test_ab_test_flow(signed_in):
+    c = signed_in
+    t = c.post("/api/tests", json={}).json()
+    assert {i["condition"] for i in t["items"]} == {"original", "rewritten"}
+    assert all(len(i["questions"]) == 5 for i in t["items"])
+    assert all("answer" not in q for i in t["items"] for q in i["questions"])
+    rewritten = next(i for i in t["items"] if i["condition"] == "rewritten")
+    assert any(s["t"] in ("change", "note") for s in rewritten["segments"])
+    for i in t["items"]:
+        assert c.post(f"/api/tests/{t['id']}/items/{i['index']}/start").status_code == 200
+        too_fast = c.post(f"/api/tests/{t['id']}/items/{i['index']}/finish",
+                          json={"seconds": 1, "answers": {}, "tripped": [], "ease": 3})
+        assert too_fast.status_code == 400
+        res = c.post(f"/api/tests/{t['id']}/items/{i['index']}/finish",
+                     json={"seconds": 90, "answers": {q["id"]: 1 for q in i["questions"]},
+                           "tripped": ["Harrow", "wind"], "ease": 4}).json()
+        assert res["total"] == 5 and 0 <= res["correct"] <= 5 and res["wpm"] > 0
+        assert res["tripped"] == ["harrow", "wind"]
+    dup = c.post(f"/api/tests/{t['id']}/items/0/finish", json={"seconds": 90, "answers": {}, "tripped": [], "ease": 3})
+    assert dup.status_code == 409
+    results = c.get("/api/results").json()
+    assert results["totals"]["original"]["n"] == 1 and results["totals"]["rewritten"]["n"] == 1
+    assert results["tests"][0]["completed"] is True
+
+
+def test_triggers_and_read_anything(signed_in):
+    c = signed_in
+    p = c.post("/api/me/triggers", json={"add": ["wind"]}).json()["profile"]
+    assert "wind" in p["trigger_words"]
+    r = c.post("/api/rewrite", json={"text": "Grandpa would wind the clock while the wind blew."}).json()
+    assert any(s["t"] == "change" and s["orig"] == "wind" for s in r["segments"])
+    p = c.post("/api/me/triggers", json={"remove": ["wind"]}).json()["profile"]
+    assert "wind" not in p["trigger_words"]
+
+
+def test_anonymous_rewrite_and_spa_fallback(client):
+    with TestClient(app) as anon:
+        r = anon.post("/api/rewrite", json={"text": "She tried to tear the page, but a tear fell."})
+        assert r.status_code == 200 and r.json()["stats"]["changes"] >= 1
+        assert anon.get("/api/results").status_code == 401
+        page = anon.get("/test")
+        assert page.status_code == 200 and "text/html" in page.headers["content-type"]
+
+
+def test_delete_account(signed_in):
+    c = signed_in
+    assert c.delete("/api/me").json()["ok"] is True
+    assert c.get("/api/me").status_code == 401
