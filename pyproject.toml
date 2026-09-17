@@ -48,6 +48,7 @@ dyslexic_rewrite = ["data/*.json", "profiles/*.json", "templates/*.html"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]   # so `import server` works from any cwd (the API tests)
 
 [tool.ruff]
 line-length = 100
