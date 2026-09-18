@@ -14,6 +14,7 @@ personal.json
 
 # private writing samples and learned personal profiles
 samples/
+!server/data/samples/
 *-posts.json
 my-posts.json
 jenn*.json

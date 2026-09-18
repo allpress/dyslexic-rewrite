@@ -102,6 +102,11 @@ export default function Landing() {
       </div>
 
       <p className="muted">
+        Don't have anything to paste yet?{' '}
+        <Link to="/read?sample=wind-in-the-willows">Try it on a sample book</Link>.
+      </p>
+
+      <p className="muted">
         <a href="https://github.com/allpress/dyslexic-rewrite">See the code on GitHub</a>
       </p>
     </main>

@@ -1,0 +1,42 @@
+[
+  {
+    "slug": "wind-in-the-willows",
+    "title": "The Wind in the Willows",
+    "author": "Kenneth Grahame",
+    "year": 1908,
+    "chapter": "Chapter 1: The River Bank",
+    "file": "wind-in-the-willows.txt",
+    "source": "https://www.gutenberg.org/ebooks/289",
+    "blurb": "Mole abandons his spring-cleaning, follows the call of the season out of doors, and meets the River for the first time."
+  },
+  {
+    "slug": "alice-in-wonderland",
+    "title": "Alice's Adventures in Wonderland",
+    "author": "Lewis Carroll",
+    "year": 1865,
+    "chapter": "Chapter 1: Down the Rabbit-Hole",
+    "file": "alice-in-wonderland.txt",
+    "source": "https://www.gutenberg.org/ebooks/11",
+    "blurb": "A bored Alice spots a waistcoated, watch-carrying White Rabbit and follows it down a very deep hole."
+  },
+  {
+    "slug": "wizard-of-oz",
+    "title": "The Wonderful Wizard of Oz",
+    "author": "L. Frank Baum",
+    "year": 1900,
+    "chapter": "Chapter 1: The Cyclone",
+    "file": "wizard-of-oz.txt",
+    "source": "https://www.gutenberg.org/ebooks/55",
+    "blurb": "Dorothy, Uncle Henry and Aunt Em watch a gray Kansas sky turn dangerous as a cyclone gathers over the prairie."
+  },
+  {
+    "slug": "christmas-carol",
+    "title": "A Christmas Carol",
+    "author": "Charles Dickens",
+    "year": 1843,
+    "chapter": "Stave 1: Marley's Ghost",
+    "file": "christmas-carol.txt",
+    "source": "https://www.gutenberg.org/ebooks/46",
+    "blurb": "Dickens establishes, beyond any doubt, that Marley is dead -- and introduces the tight-fisted Ebenezer Scrooge."
+  }
+]

@@ -1,10 +1,28 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import Reader, { paragraphTexts } from '../components/Reader';
 import ReadAloudButton from '../components/ReadAloudButton';
 import PhoneticModeSelect from '../components/PhoneticModeSelect';
-import { ApiError, patchMe, postFeedback, rewrite, type PhoneticMapMode, type RewriteResponse } from '../api';
+import SamplePicker from '../components/SamplePicker';
+import {
+  ApiError,
+  getSample,
+  patchMe,
+  postFeedback,
+  rewrite,
+  type PhoneticMapMode,
+  type RewriteResponse,
+} from '../api';
 import { useMe } from '../useMe';
+
+/** Attribution shown under a sample passage instead of the paste-your-own flow. */
+interface SampleAttribution {
+  title: string;
+  author: string;
+  year: number;
+  chapter: string;
+  source: string;
+}
 
 const MAX_CHARS = 20000;
 
@@ -42,6 +60,40 @@ export default function ReadAnything() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [showPicker, setShowPicker] = useState(false);
+  const [sample, setSample] = useState<SampleAttribution | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const loadedSampleParam = useRef<string | null>(null);
+
+  async function loadSample(slug: string) {
+    setBusy(true);
+    setError(null);
+    setSaved(false);
+    setShowPicker(false);
+    try {
+      const res = await getSample(slug);
+      setResult(res);
+      setSample({ title: res.title, author: res.author, year: res.year, chapter: res.chapter, source: res.source });
+      setTripped(new Map());
+      setSearchParams({ sample: slug }, { replace: true });
+    } catch (err) {
+      if (err instanceof ApiError && err.isUnauthorized) return;
+      setError(err instanceof ApiError ? err.message : 'We could not load that sample. Try again.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Deep link: /read?sample=<slug> loads that sample directly, once.
+  useEffect(() => {
+    const slug = searchParams.get('sample');
+    if (slug && loadedSampleParam.current !== slug) {
+      loadedSampleParam.current = slug;
+      void loadSample(slug);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
   async function submit(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
@@ -50,6 +102,7 @@ export default function ReadAnything() {
     try {
       const res = await rewrite(text);
       setResult(res);
+      setSample(null);
       setTripped(new Map());
     } catch (err) {
       if (err instanceof ApiError && err.isUnauthorized) return;
@@ -57,6 +110,13 @@ export default function ReadAnything() {
     } finally {
       setBusy(false);
     }
+  }
+
+  function pasteSomethingElse() {
+    setResult(null);
+    setSample(null);
+    setTripped(new Map());
+    if (searchParams.has('sample')) setSearchParams({}, { replace: true });
   }
 
   function toggleWord(id: string, word: string) {
@@ -115,14 +175,7 @@ export default function ReadAnything() {
           <PhoneticModeSelect value={phoneticMapMode} onChange={(m) => void changePhoneticMode(m)} />
           <ReadAloudButton paragraphs={paragraphTexts(result.segments)} />
           <span className="reader-toolbar__spacer" />
-          <button
-            className="btn btn--plain btn--small"
-            type="button"
-            onClick={() => {
-              setResult(null);
-              setTripped(new Map());
-            }}
-          >
+          <button className="btn btn--plain btn--small" type="button" onClick={pasteSomethingElse}>
             Paste something else
           </button>
         </div>
@@ -142,6 +195,17 @@ export default function ReadAnything() {
           phoneticMap={result.phonetic_map}
           phoneticMapMode={phoneticMapMode}
         />
+
+        {sample && (
+          <p className="muted sample-attribution">
+            From <strong>{sample.title}</strong> by {sample.author}, {sample.year} — public
+            domain, via{' '}
+            <a href={sample.source} target="_blank" rel="noreferrer">
+              Project Gutenberg
+            </a>
+            .
+          </p>
+        )}
 
         {user ? (
           tripped.size > 0 && (
@@ -192,10 +256,24 @@ export default function ReadAnything() {
             {text.length} of {MAX_CHARS} characters. We never store what you paste.
           </p>
         </div>
-        <button className="btn btn--wide" type="submit" disabled={busy || !text.trim()}>
-          {busy ? 'Rewriting…' : 'Rewrite it'}
-        </button>
+        <div className="btn-row">
+          <button className="btn btn--wide" type="submit" disabled={busy || !text.trim()}>
+            {busy ? 'Rewriting…' : 'Rewrite it'}
+          </button>
+          <button
+            className="btn btn--quiet"
+            type="button"
+            onClick={() => setShowPicker(true)}
+            disabled={busy}
+          >
+            Show me an example
+          </button>
+        </div>
       </form>
+
+      {showPicker && (
+        <SamplePicker onPick={(slug) => void loadSample(slug)} onClose={() => setShowPicker(false)} />
+      )}
 
       {!user && (
         <p className="muted">

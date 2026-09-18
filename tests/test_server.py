@@ -20,7 +20,16 @@ except Exception as e:  # pragma: no cover
 
 from fastapi.testclient import TestClient  # noqa: E402
 
+from server import db  # noqa: E402
 from server.app import app  # noqa: E402
+
+
+def _clear_rewrite_cache() -> None:
+    """The cache table is real Postgres state that outlives one pytest run, so cache tests
+    start from a known-empty table rather than assuming nothing has been cached yet."""
+    with db.conn() as c:
+        c.execute("DELETE FROM rewrite_cache")
+        c.commit()
 
 EMAIL = "pytest-user@example.com"
 SAMPLE = ("I finished the shelves today!! Took forever but I love it. Marisol helped with the trim and we got "
@@ -130,6 +139,72 @@ def test_anonymous_rewrite_and_spa_fallback(client):
         assert anon.get("/api/results").status_code == 401
         page = anon.get("/test")
         assert page.status_code == 200 and "text/html" in page.headers["content-type"]
+
+
+SAMPLE_SLUGS = {"wind-in-the-willows", "alice-in-wonderland", "wizard-of-oz", "christmas-carol"}
+
+
+def test_samples_list(client):
+    listed = client.get("/api/samples").json()
+    assert {s["slug"] for s in listed} == SAMPLE_SLUGS
+    for s in listed:
+        assert s["title"] and s["author"] and s["year"] and s["chapter"]
+        assert s["source"].startswith("https://")
+        assert s["blurb"] and s["words"] > 0
+    wind = next(s for s in listed if s["slug"] == "wind-in-the-willows")
+    assert wind["title"] == "The Wind in the Willows" and wind["author"] == "Kenneth Grahame"
+    assert wind["year"] == 1908
+
+
+def test_sample_anonymous_is_allowed(client):
+    with TestClient(app) as anon:
+        r = anon.get("/api/samples/wind-in-the-willows")
+        body = r.json()
+        assert r.status_code == 200
+        assert body["title"] == "The Wind in the Willows" and body["author"] == "Kenneth Grahame"
+        assert isinstance(body["segments"], list) and len(body["segments"]) > 0
+        assert isinstance(body["phonetic_map"], list) and "stats" in body
+        assert isinstance(body["cached"], bool)  # may already be warm from startup
+
+
+def test_sample_unknown_slug_404(client):
+    assert client.get("/api/samples/not-a-real-book").status_code == 404
+
+
+def test_sample_rewrite_is_cached_per_profile(signed_in):
+    c = signed_in
+    _clear_rewrite_cache()
+    c.patch("/api/me", json={"base_profile": "visual"})
+    r1 = c.get("/api/samples/wind-in-the-willows").json()
+    assert r1["cached"] is False
+    assert r1["title"] == "The Wind in the Willows" and r1["author"] == "Kenneth Grahame"
+    assert r1["chapter"] and r1["source"].startswith("https://")
+    assert len(r1["segments"]) > 0
+
+    r2 = c.get("/api/samples/wind-in-the-willows").json()
+    assert r2["cached"] is True
+    assert r2["segments"] == r1["segments"] and r2["phonetic_map"] == r1["phonetic_map"]
+
+    c.patch("/api/me", json={"base_profile": "attention"})  # a different profile -> cache miss
+    r3 = c.get("/api/samples/wind-in-the-willows").json()
+    assert r3["cached"] is False
+    c.patch("/api/me", json={"base_profile": "default"})
+
+
+def test_rewrite_is_cached(signed_in):
+    c = signed_in
+    _clear_rewrite_cache()
+    text = "The wind blew hard across the moor while Grandpa wound the old clock again tonight."
+    r1 = c.post("/api/rewrite", json={"text": text}).json()
+    assert r1["cached"] is False
+    r2 = c.post("/api/rewrite", json={"text": text}).json()
+    assert r2["cached"] is True
+    assert r2["segments"] == r1["segments"]
+
+    c.patch("/api/me", json={"base_profile": "phonological"})  # a different profile -> cache miss
+    r3 = c.post("/api/rewrite", json={"text": text}).json()
+    assert r3["cached"] is False
+    c.patch("/api/me", json={"base_profile": "default"})
 
 
 def test_delete_account(signed_in):

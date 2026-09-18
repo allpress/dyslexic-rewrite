@@ -166,6 +166,29 @@ export interface RewriteResponse {
   segments: Segment[];
   stats: RewriteStats;
   phonetic_map: PhoneticMapEntry[];
+  /** Whether this came from the rewrite cache instead of being freshly computed. */
+  cached: boolean;
+}
+
+/** A public-domain excerpt listed by GET /api/samples ("Show me an example"). */
+export interface SampleInfo {
+  slug: string;
+  title: string;
+  author: string;
+  year: number;
+  chapter: string;
+  /** The Project Gutenberg ebook page for this title. */
+  source: string;
+  blurb: string;
+  words: number;
+}
+
+export interface SampleResponse extends RewriteResponse {
+  title: string;
+  author: string;
+  year: number;
+  chapter: string;
+  source: string;
 }
 
 export interface MeResponse {
@@ -293,6 +316,12 @@ export const rewrite = (text: string) => post<RewriteResponse>('/rewrite', { tex
 
 export const postFeedback = (body: { tripped: string[]; safe?: string[] }) =>
   post<{ profile: ProfileSummary }>('/feedback', body);
+
+/* -------------------------------------------------------------- sample books */
+
+export const getSamples = () => request<SampleInfo[]>('/samples');
+
+export const getSample = (slug: string) => request<SampleResponse>(`/samples/${encodeURIComponent(slug)}`);
 
 /* ------------------------------------------------------ voice recordings */
 

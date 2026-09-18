@@ -938,3 +938,59 @@ input[type='file'] {
   font-size: 0.8rem;
   color: var(--muted);
 }
+
+/* Sample books ("Show me an example") */
+.sample-picker {
+  border: 2px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sample-picker__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sample-picker__header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.sample-picker__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sample-picker__item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px;
+  border: 2px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.sample-picker__info h3 {
+  margin: 0 0 4px;
+  font-size: 1rem;
+}
+
+.sample-picker__info p {
+  margin: 0 0 6px;
+}
+
+.sample-attribution {
+  font-style: italic;
+}

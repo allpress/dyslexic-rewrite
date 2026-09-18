@@ -153,3 +153,57 @@ gains `phonetic_map` (the mode that was active for the reader at the moment they
 
 Migration: `server/migrations/003_phonetic_map.sql` adds `users.phonetic_map` (`TEXT NOT NULL
 DEFAULT 'on_demand'`) and `test_items.phonetic_map` / `test_items.read_aloud`.
+
+---
+
+# Sample books & rewrite cache (v0.4)
+
+## Sample books ("Show me an example")
+
+Four short, public-domain excerpts a visitor can load straight into the read-anything view
+without pasting anything in, defined in `server/data/samples/index.json` (metadata) plus one
+`.txt` file per excerpt (`server/samples.py` loads both once, at import).
+
+| Method | Path | Returns |
+| --- | --- | --- |
+| GET | `/api/samples` | `[SampleInfo]` |
+| GET | `/api/samples/{slug}` | same shape as `POST /api/rewrite`, plus `{title, author, year, chapter, source}` (404 if `slug` is unknown) |
+
+`SampleInfo` = `{slug, title, author, year, chapter, source, blurb, words}` — `source` is the
+Project Gutenberg ebook page for that title.
+
+`GET /api/samples/{slug}` rewrites the excerpt with the caller's own profile when signed in,
+the `default` profile otherwise (anonymous is allowed, exactly like `/api/rewrite`), and returns
+`{segments, stats, phonetic_map, cached, title, author, year, chapter, source}`.
+
+## Rewrite cache
+
+`POST /api/rewrite` and `GET /api/samples/{slug}` share a cache (`server/cache.py`,
+`server/migrations/004_rewrite_cache.sql`) so re-rewriting the same text under the same profile
+does no analysis/rewrite/phonetic-map work a second time. Both now also return `cached: bool`,
+so a caller can see whether it was served from cache.
+
+The cache key is `sha256(package_version | engine | profile_fingerprint | text)`, where
+`profile_fingerprint` is a sha256 of the canonical (sorted-key) JSON of every `ReaderProfile`
+field that can change a rewrite or map -- everything except `name`, `description` and `layout`.
+Sample-book entries use the same key, prefixed `sample:`, so the four samples are never subject
+to eviction.
+
+The stored `phonetic_map` is always computed as if the profile's mode were `"always"` (the full
+entry list, each entry carrying its `kind`); the server re-derives the `always` flag for the
+caller's real mode on every read (`off` -> `[]`, `on_demand` -> `always` only for entries whose
+`kind` is in the profile's always-kinds or is `"personal"`, `always` -> every entry), so one row
+serves every reader regardless of their `phonetic_map` preference. Behaviour for a caller is
+identical to computing the map fresh each time.
+
+Bounds: `/api/rewrite` only caches text of 20,000 characters or fewer (its own existing limit,
+so in practice always). On every insert there's a 1-in-50 chance of an opportunistic cleanup
+that deletes non-sample rows whose `last_hit` is older than 90 days, then trims the oldest
+(by `last_hit`) non-sample rows until the table is back under 5,000 rows.
+
+The four samples are pre-rewritten for the `default` profile in a background thread at startup
+(`server/app.py`'s lifespan hook), so the first visitor to open one doesn't pay for it; a failure
+there is logged and never blocks startup.
+
+Migration: `server/migrations/004_rewrite_cache.sql` adds `rewrite_cache (key, engine,
+package_version, segments, stats, phonetic_map, created_at, last_hit, hits)`.

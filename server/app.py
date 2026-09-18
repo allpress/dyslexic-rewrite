@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import random
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -17,7 +18,7 @@ from pydantic import BaseModel, Field
 from dyslexic_rewrite import __version__
 from dyslexic_rewrite.profile import BUILTIN_PROFILES
 
-from . import auth, db, passages, prompts, service, storage
+from . import auth, cache, db, passages, prompts, samples, service, storage
 
 app = FastAPI(title="Unwind Words", version=__version__, docs_url=None, redoc_url=None)
 SECURE_COOKIES = os.environ.get("SECURE_COOKIES", "1") == "1"
@@ -27,6 +28,16 @@ WEB_DIST = Path(os.environ.get("WEB_DIST", Path(__file__).resolve().parent.paren
 from contextlib import asynccontextmanager  # noqa: E402
 
 
+def _warm_sample_cache() -> None:
+    """Pre-rewrite the sample books for the default profile. Runs off a background thread so
+    it never delays startup; a failure here (e.g. no DB yet) just means the first reader to
+    open a sample pays the cost that this warm-up was meant to save."""
+    try:
+        cache.warm_samples()
+    except Exception as e:  # pragma: no cover - best-effort only
+        print("sample cache warm-up failed:", e)
+
+
 @asynccontextmanager
 async def _lifespan(_: FastAPI):
     applied = db.migrate()
@@ -34,6 +45,7 @@ async def _lifespan(_: FastAPI):
         passages.seed(c)
     if applied:
         print("migrations applied:", ", ".join(applied))
+    threading.Thread(target=_warm_sample_cache, daemon=True).start()
     yield
     db.close()
 
@@ -394,16 +406,38 @@ def rewrite_any(body: TextIn, u: dict | None = Depends(optional_user)):
     if len(text) > 20_000:
         raise HTTPException(400, "That's a lot at once — try up to 20,000 characters.")
     profile, _ = service.get_profile(u["id"], u["base_profile"]) if u else (service.load_profile("default"), None)
-    segs, stats = service.rewrite_text(text, profile)
     mode = u["phonetic_map"] if u else "on_demand"
-    phonetic_map = service.compute_phonetic_map(segs, profile, mode)
-    return {"segments": segs, "stats": stats, "phonetic_map": phonetic_map}
+    segs, stats, phonetic_map, cached = cache.cached_rewrite(text, profile, mode)
+    return {"segments": segs, "stats": stats, "phonetic_map": phonetic_map, "cached": cached}
 
 
 @app.post("/api/feedback")
 def feedback(body: FeedbackIn, u: dict = Depends(current_user)):
     p = service.update_triggers(u["id"], u["base_profile"], add=body.tripped, safe=body.safe)
     return {"profile": service.profile_summary(p, u["base_profile"])}
+
+
+# ---------------------------------------------------------------------------------------
+# sample books ("Show me an example")
+# ---------------------------------------------------------------------------------------
+@app.get("/api/samples")
+def list_samples():
+    return samples.list_samples()
+
+
+@app.get("/api/samples/{slug}")
+def get_sample(slug: str, u: dict | None = Depends(optional_user)):
+    s = samples.get_sample(slug)
+    if not s:
+        raise HTTPException(404, "No such sample.")
+    profile, _ = service.get_profile(u["id"], u["base_profile"]) if u else (service.load_profile("default"), None)
+    mode = u["phonetic_map"] if u else "on_demand"
+    segs, stats, phonetic_map, cached = cache.cached_rewrite(s["text"], profile, mode, sample_slug=slug)
+    return {
+        "segments": segs, "stats": stats, "phonetic_map": phonetic_map, "cached": cached,
+        "title": s["title"], "author": s["author"], "year": s["year"], "chapter": s["chapter"],
+        "source": s["source"],
+    }
 
 
 # ---------------------------------------------------------------------------------------
