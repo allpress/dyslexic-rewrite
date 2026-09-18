@@ -23,4 +23,5 @@ web/node_modules/
 web/dist/
 
 # locally stored voice recordings (AUDIO_DIR default)
-data/
+/data/
+!server/data/
