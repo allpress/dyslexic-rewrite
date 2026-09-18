@@ -141,7 +141,7 @@ def test_anonymous_rewrite_and_spa_fallback(client):
         assert page.status_code == 200 and "text/html" in page.headers["content-type"]
 
 
-SAMPLE_SLUGS = {"wind-in-the-willows", "alice-in-wonderland", "wizard-of-oz", "christmas-carol"}
+SAMPLE_SLUGS = {"wind-in-the-willows", "alice-in-wonderland", "red-headed-league", "treasure-island"}
 
 
 def test_samples_list(client):

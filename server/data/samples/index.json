@@ -4,39 +4,39 @@
     "title": "The Wind in the Willows",
     "author": "Kenneth Grahame",
     "year": 1908,
-    "chapter": "Chapter 1: The River Bank",
+    "chapter": "Chapter I: The River Bank",
     "file": "wind-in-the-willows.txt",
     "source": "https://www.gutenberg.org/ebooks/289",
-    "blurb": "Mole abandons his spring-cleaning, follows the call of the season out of doors, and meets the River for the first time."
+    "blurb": "Mole gives up on spring-cleaning and meets the Water Rat. Boats, the river, and long happy sentences."
   },
   {
     "slug": "alice-in-wonderland",
     "title": "Alice's Adventures in Wonderland",
     "author": "Lewis Carroll",
     "year": 1865,
-    "chapter": "Chapter 1: Down the Rabbit-Hole",
+    "chapter": "Chapter I: Down the Rabbit-Hole",
     "file": "alice-in-wonderland.txt",
     "source": "https://www.gutenberg.org/ebooks/11",
-    "blurb": "A bored Alice spots a waistcoated, watch-carrying White Rabbit and follows it down a very deep hole."
+    "blurb": "Alice follows the White Rabbit down the hole. Playful, with bracketed asides and words that sound alike."
   },
   {
-    "slug": "wizard-of-oz",
-    "title": "The Wonderful Wizard of Oz",
-    "author": "L. Frank Baum",
-    "year": 1900,
-    "chapter": "Chapter 1: The Cyclone",
-    "file": "wizard-of-oz.txt",
-    "source": "https://www.gutenberg.org/ebooks/55",
-    "blurb": "Dorothy, Uncle Henry and Aunt Em watch a gray Kansas sky turn dangerous as a cyclone gathers over the prairie."
+    "slug": "red-headed-league",
+    "title": "The Adventures of Sherlock Holmes",
+    "author": "Arthur Conan Doyle",
+    "year": 1892,
+    "chapter": "The Red-Headed League (opening)",
+    "file": "red-headed-league.txt",
+    "source": "https://www.gutenberg.org/ebooks/1661",
+    "blurb": "Watson walks in on a client with fiery red hair. Dialogue-heavy, with some long formal sentences."
   },
   {
-    "slug": "christmas-carol",
-    "title": "A Christmas Carol",
-    "author": "Charles Dickens",
-    "year": 1843,
-    "chapter": "Stave 1: Marley's Ghost",
-    "file": "christmas-carol.txt",
-    "source": "https://www.gutenberg.org/ebooks/46",
-    "blurb": "Dickens establishes, beyond any doubt, that Marley is dead -- and introduces the tight-fisted Ebenezer Scrooge."
+    "slug": "treasure-island",
+    "title": "Treasure Island",
+    "author": "Robert Louis Stevenson",
+    "year": 1883,
+    "chapter": "Chapter I: The Old Sea-dog at the Admiral Benbow",
+    "file": "treasure-island.txt",
+    "source": "https://www.gutenberg.org/ebooks/120",
+    "blurb": "An old seaman takes a room at the inn. Dense, old-fashioned prose with the longest sentences of the four."
   }
 ]
