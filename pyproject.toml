@@ -23,6 +23,7 @@ dependencies = [
   "wordfreq>=3.0",
   "jellyfish>=1.0",
   "click>=8.1",
+  "cmudict>=1.0",
 ]
 
 [project.optional-dependencies]

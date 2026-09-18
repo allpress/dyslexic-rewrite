@@ -71,7 +71,7 @@ def detect_phonetic(doc, profile) -> list[Trigger]:
                         start=tok.idx, end=tok.idx + len(tok.text), text=tok.text,
                         reason=f"'{tok.text}' and '{ptok.text}' are a {kind} within {si - psi} sentence(s)",
                         score=0.75 if kind == "confusable pair" else 0.6,
-                        related=[(ptok.idx, ptok.idx + len(ptok.text))], pos=tok.pos_,
+                        related=[(ptok.idx, ptok.idx + len(ptok.text))], pos=tok.pos_, tag=tok.tag_,
                     ))
                     break
             recent.append((si, tok, code))

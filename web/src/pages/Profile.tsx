@@ -6,7 +6,9 @@ import {
   patchMe,
   postTriggers,
   type BaseProfile,
+  type PhoneticMapMode,
 } from '../api';
+import PhoneticModeSelect from '../components/PhoneticModeSelect';
 import { useMe } from '../useMe';
 
 const PROFILE_LABELS: Record<BaseProfile, string> = {
@@ -31,6 +33,20 @@ export default function Profile() {
     setError(null);
     try {
       const res = await patchMe({ base_profile: value });
+      setMe({ user: res.user, profile });
+    } catch (err) {
+      if (err instanceof ApiError && err.isUnauthorized) return;
+      setError(err instanceof ApiError ? err.message : 'We could not change that.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function changePhoneticMode(mode: PhoneticMapMode) {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await patchMe({ phonetic_map: mode });
       setMe({ user: res.user, profile });
     } catch (err) {
       if (err instanceof ApiError && err.isUnauthorized) return;
@@ -96,6 +112,16 @@ export default function Profile() {
             </button>
           ))}
         </div>
+      </section>
+
+      <section className="stack" aria-labelledby="phon-heading">
+        <h2 id="phon-heading">Phonetic map</h2>
+        <p>
+          Shows a small respelling above words that are easy to mis-read (like{' '}
+          <em>in-TEN-shun</em>) — off by default it stays hidden, on demand it shows when you tap
+          or hover a word, and always keeps the trickiest words marked all the time.
+        </p>
+        <PhoneticModeSelect value={user.phonetic_map} onChange={(m) => void changePhoneticMode(m)} disabled={busy} />
       </section>
 
       <section className="stack" aria-labelledby="trig-heading">

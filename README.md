@@ -78,6 +78,28 @@ why. Dotted words were flagged but kept — hover for a pronunciation cue (`wind
 marked word to record that it tripped you, press **Start reading / Finish reading** for a words-per-minute number,
 then **Export feedback**. That JSON is what `profile feedback` learns from.
 
+### Phonetic map
+
+A friendly respelling (`in-TEN-shun`, not IPA) shown right over a flagged word — `<ruby>` text with the
+respelling as `<rt>` above it — for words a reader might stumble on: heteronyms, words re-used with a different
+meaning nearby, personal trigger words, rare or long words, near-homophones. The **Phonetic map** dropdown in the
+top bar switches between **off**, **on demand** (hover/tap to reveal; heteronyms, re-used words and personal
+triggers always show), and **always** (every respelling visible); it starts at whatever the profile says
+(`phonetic_map: "off" | "on_demand" | "always"`, plus `phonetic_map_kinds` / `phonetic_map_always_kinds` to
+choose which trigger families get one). Every marked word's tip popover also has a speaker button that reads
+just that word aloud, and the top bar has a **Read aloud** button that reads the whole piece, paragraph by
+paragraph. Check the table yourself from the command line:
+
+```bash
+dysrewrite say intention        # in-TEN-shun
+dysrewrite say wind --pos VERB  # WYND (rhymes with 'find')
+dysrewrite say read --tag VBD   # RED  (past tense)
+```
+
+`dysrewrite rewrite`/`analyze` take `--phonetic-map off|on_demand|always` to override the profile for one run,
+and `analyze --show` lists the respelling next to each flagged word. Needs the optional `cmudict` package (a
+core dependency); without it, respellings are simply omitted.
+
 ### Python
 
 ```python
@@ -129,6 +151,10 @@ text ──► analyze ──► triggers ──► rewrite ──► render
   “rare” for them.
 - `syntax` — sentence length over the profile's target, three or more clauses, a clause wedged between subject
   and verb, passive voice.
+
+**Phonetic map** (`src/dyslexic_rewrite/pronounce.py`) turns a trigger word into a friendly respelling
+(`in-TEN-shun`, not IPA) via `cmudict`, picking the right sense for heteronyms (`wind`/`wind`, `record`/`record`)
+from a small routing table keyed by POS and, for tense-based ones like `read`, spaCy's fine-grained tag.
 
 **Rewriter** (`src/dyslexic_rewrite/rewrite/rules.py`) substitutes only where it is safe (personal replacements,
 phrasal idioms, ambiguity clashes; rare/long words only with `--simplify-vocab`), then straightens shape:

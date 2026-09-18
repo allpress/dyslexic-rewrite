@@ -15,6 +15,16 @@ from dyslexic_rewrite.profile import BUILTIN_PROFILES, ReaderProfile
 
 from . import db
 
+# The phonetic-map module (respellings like "in-TEN-shun") is built separately; import it
+# defensively so the server still starts, and every phonetic-map call still degrades to "no
+# entries", if that module is not present yet.
+try:
+    from dyslexic_rewrite.pronounce import phonetic_map as _phonetic_map
+except ImportError:  # pragma: no cover - exercised once dyslexic_rewrite.pronounce lands
+    _phonetic_map = None
+
+PHONETIC_MAP_MODES = ("off", "on_demand", "always")
+
 
 # ---------------------------------------------------------------------------------------
 # profiles
@@ -160,3 +170,50 @@ def rewrite_text(text: str, profile: ReaderProfile) -> tuple[list[dict], dict]:
 
 def word_count(segments: list[dict]) -> int:
     return sum(len(s.get("s", "").split()) for s in segments if s["t"] in ("text", "change", "note", "heading"))
+
+
+# ---------------------------------------------------------------------------------------
+# phonetic map -> a respelling ("in-TEN-shun") shown over words the reader might struggle with
+# ---------------------------------------------------------------------------------------
+def served_text(segments: list[dict]) -> str:
+    """Reconstruct the exact text the reader is shown, as one string.
+
+    Mirrors `servedTextSpans` in web/src/components/Reader.tsx: segment strings are
+    concatenated in order, and each `para` break becomes two newlines. Char offsets into
+    this string are what `phonetic_map` entries are anchored to, and what the client maps
+    back onto its segments.
+    """
+    parts: list[str] = []
+    for s in segments:
+        parts.append("\n\n" if s["t"] == "para" else s.get("s", ""))
+    return "".join(parts)
+
+
+def compute_phonetic_map(segments: list[dict], profile: ReaderProfile, mode: str) -> list[dict]:
+    """Phonetic-map entries for the *served* text, or [] when off, unsupported, or it fails.
+
+    `dyslexic_rewrite.pronounce.phonetic_map` itself branches on `profile.phonetic_map` (it
+    returns [] when that's "off", and marks every entry `always=True` when it's "always"), so
+    the reader's saved mode -- which this app keeps on `users.phonetic_map`, not in the
+    profile blob -- is applied onto the profile for the duration of this one call.
+    """
+    if _phonetic_map is None or mode == "off":
+        return []
+    text = served_text(segments)
+    if not text.strip():
+        return []
+    saved_mode = getattr(profile, "phonetic_map", "on_demand")
+    try:
+        profile.phonetic_map = mode
+        entries = _phonetic_map(text, profile=profile)
+    except Exception:  # the module may still be evolving; never break passage serving over it
+        return []
+    finally:
+        profile.phonetic_map = saved_mode
+    return [
+        {
+            "start": e.start, "end": e.end, "word": e.word, "respell": e.respell,
+            "hint": e.hint, "kind": e.kind, "always": e.always,
+        }
+        for e in entries
+    ]

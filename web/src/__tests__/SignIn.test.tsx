@@ -13,6 +13,7 @@ const USER: User = {
   base_profile: 'default',
   onboarded: false,
   has_personal_profile: false,
+  phonetic_map: 'on_demand',
   created_at: '2026-09-17T10:00:00Z',
 };
 

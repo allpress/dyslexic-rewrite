@@ -1,13 +1,37 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import Reader from '../components/Reader';
-import { ApiError, postFeedback, rewrite, type RewriteResponse } from '../api';
+import Reader, { paragraphTexts } from '../components/Reader';
+import ReadAloudButton from '../components/ReadAloudButton';
+import PhoneticModeSelect from '../components/PhoneticModeSelect';
+import { ApiError, patchMe, postFeedback, rewrite, type PhoneticMapMode, type RewriteResponse } from '../api';
 import { useMe } from '../useMe';
 
 const MAX_CHARS = 20000;
 
 export default function ReadAnything() {
-  const { user, setProfile } = useMe();
+  const { user, profile, setProfile, setMe } = useMe();
+
+  const [phoneticMapMode, setPhoneticMapMode] = useState<PhoneticMapMode>(
+    user?.phonetic_map ?? 'on_demand',
+  );
+  const syncedPhoneticMode = useRef(false);
+  useEffect(() => {
+    if (user && !syncedPhoneticMode.current) {
+      syncedPhoneticMode.current = true;
+      setPhoneticMapMode(user.phonetic_map);
+    }
+  }, [user]);
+
+  async function changePhoneticMode(mode: PhoneticMapMode) {
+    setPhoneticMapMode(mode);
+    if (!user) return;
+    try {
+      const res = await patchMe({ phonetic_map: mode });
+      setMe({ user: res.user, profile });
+    } catch {
+      // Keep the local change even if saving the preference fails.
+    }
+  }
 
   const [text, setText] = useState('');
   const [result, setResult] = useState<RewriteResponse | null>(null);
@@ -88,6 +112,8 @@ export default function ReadAnything() {
           >
             {showOriginalInline ? 'Hide original' : 'Show original inline'}
           </button>
+          <PhoneticModeSelect value={phoneticMapMode} onChange={(m) => void changePhoneticMode(m)} />
+          <ReadAloudButton paragraphs={paragraphTexts(result.segments)} />
           <span className="reader-toolbar__spacer" />
           <button
             className="btn btn--plain btn--small"
@@ -113,6 +139,8 @@ export default function ReadAnything() {
           showOriginalInline={showOriginalInline}
           tripped={new Set(tripped.keys())}
           onToggleWord={toggleWord}
+          phoneticMap={result.phonetic_map}
+          phoneticMapMode={phoneticMapMode}
         />
 
         {user ? (

@@ -16,7 +16,9 @@ import json
 from pathlib import Path
 
 from .profile import ReaderProfile
+from .pronounce import respell
 from .rewrite.model import RewriteResult
+from .triggers.base import Trigger
 
 _CSS = """
 :root {{
@@ -46,9 +48,18 @@ h2 {{ font-size: 1.15em; margin: 1.6em 0 0.6em; }}
 .note {{ border-bottom: 2px dotted var(--note); }}
 body.plain .chg, body.plain .note {{ border-bottom: none; }}
 body.showorig .chg::after {{ content: " (" attr(data-orig) ")"; color: var(--muted); font-size: 0.8em; }}
+ruby {{ ruby-position: over; }}
+rt {{ display: none; font-size: 0.58em; font-weight: 700; color: var(--accent); letter-spacing: 0; word-spacing: 0; }}
+.w.always rt {{ display: ruby-text; display: inline; }}
+.w:hover rt, .w:focus rt, .w.open rt {{ display: ruby-text; display: inline; }}
+body.pm-off rt {{ display: none !important; }}
+body.pm-always rt {{ display: ruby-text; display: inline !important; }}
 #tip {{ position: fixed; max-width: 34ch; background: #222; color: #fff; padding: 10px 12px; border-radius: 10px;
-  font-size: 0.7em; line-height: 1.5; letter-spacing: 0; word-spacing: 0; pointer-events: none; display: none; z-index: 5; }}
+  font-size: 0.7em; line-height: 1.5; letter-spacing: 0; word-spacing: 0; pointer-events: auto; display: none; z-index: 5; }}
 #tip b {{ color: #ffd58a; }}
+#tip .speak-btn {{ font: inherit; margin-top: 4px; padding: 4px 8px; border-radius: 6px; border: 1px solid #fff5;
+  background: #fff2; color: #fff; cursor: pointer; }}
+#tip .speak-btn:hover {{ background: #fff3; }}
 .s {{ }}
 footer {{ max-width: var(--maxw); margin: 40px auto; padding: 0 16px; color: var(--muted); font-size: 0.7em; letter-spacing: 0; }}
 """
@@ -57,30 +68,82 @@ _JS = """
 (function(){
   const tip = document.getElementById('tip');
   const tripped = new Set();
+  const phoneticShown = new Set();
   const state = { started: null, finished: null };
+  function wordOf(el){ return (el.dataset.orig || el.textContent).trim().toLowerCase(); }
   function show(e, el){
     let h = '';
     if (el.dataset.orig) h += '<b>Original:</b> ' + esc(el.dataset.orig) + '<br>';
     if (el.dataset.why)  h += esc(el.dataset.why) + '<br>';
     if (el.dataset.hint) h += '<b>Say it:</b> ' + esc(el.dataset.hint) + '<br>';
+    if (el.dataset.respell) {
+      h += '<b>Sounds like:</b> ' + esc(el.dataset.respell) + '<br>';
+      phoneticShown.add(wordOf(el));
+    }
     if (el.dataset.alts) h += '<b>Other words:</b> ' + esc(el.dataset.alts) + '<br>';
-    h += '<i>Click to mark "this word tripped me"</i>';
+    if ('speechSynthesis' in window) {
+      h += '<button type="button" class="speak-btn" data-say="' + esc(wordOf(el)) + '">&#128266; Say it aloud</button><br>';
+    }
+    h += '<i>Click the word to mark "this word tripped me"</i>';
     tip.innerHTML = h; tip.style.display = 'block';
     const x = Math.min(e.clientX + 14, window.innerWidth - tip.offsetWidth - 10);
     tip.style.left = x + 'px'; tip.style.top = (e.clientY + 18) + 'px';
   }
   function esc(s){ return s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+  function speak(text, rate){
+    if (!('speechSynthesis' in window)) return;
+    const u = new SpeechSynthesisUtterance(text);
+    u.rate = rate || 0.85;
+    speechSynthesis.speak(u);
+    return u;
+  }
+  tip.addEventListener('click', (e) => {
+    const btn = e.target.closest('.speak-btn');
+    if (!btn) return;
+    e.stopPropagation();
+    speak(btn.dataset.say, 0.85);
+  });
   document.querySelectorAll('.w').forEach(el => {
     el.addEventListener('mousemove', e => show(e, el));
+    el.addEventListener('focus', e => show(e, el));
     el.addEventListener('mouseleave', () => tip.style.display = 'none');
     el.addEventListener('click', () => {
-      const w = (el.dataset.orig || el.textContent).trim().toLowerCase();
+      el.classList.toggle('open');
+      const w = wordOf(el);
       if (el.classList.toggle('tripped')) tripped.add(w); else tripped.delete(w);
       document.getElementById('count').textContent = tripped.size;
     });
   });
   document.getElementById('toggleOrig').onclick = () => document.body.classList.toggle('showorig');
   document.getElementById('togglePlain').onclick = () => document.body.classList.toggle('plain');
+  const pmSelect = document.getElementById('pmToggle');
+  if (pmSelect) {
+    function applyPM(v){
+      document.body.classList.remove('pm-off', 'pm-on_demand', 'pm-always');
+      document.body.classList.add('pm-' + v);
+    }
+    pmSelect.value = PHONETIC_MAP_MODE;
+    applyPM(PHONETIC_MAP_MODE);
+    pmSelect.onchange = () => applyPM(pmSelect.value);
+  }
+  const readBtn = document.getElementById('readAloud');
+  let reading = false;
+  readBtn.onclick = () => {
+    if (reading) {
+      speechSynthesis.cancel(); reading = false; readBtn.textContent = 'Read aloud';
+      return;
+    }
+    if (!('speechSynthesis' in window)) return;
+    const paras = [...document.querySelectorAll('main p, main h2')].map(p => p.textContent.trim()).filter(Boolean);
+    let i = 0;
+    reading = true; readBtn.textContent = 'Stop reading';
+    function next(){
+      if (!reading || i >= paras.length) { reading = false; readBtn.textContent = 'Read aloud'; return; }
+      const u = speak(paras[i++], 0.85);
+      if (u) u.onend = next; else next();
+    }
+    next();
+  };
   const timerBtn = document.getElementById('timer');
   timerBtn.onclick = () => {
     if (!state.started) { state.started = Date.now(); timerBtn.textContent = 'Finish reading'; }
@@ -94,6 +157,7 @@ _JS = """
   };
   document.getElementById('export').onclick = () => {
     const data = { tripped: [...tripped], profile: PROFILE, engine: ENGINE, words: WORDS,
+                   phonetic_map_shown: [...phoneticShown],
                    seconds: state.finished && state.started ? Math.round((state.finished - state.started)/1000) : null,
                    wpm: state.wpm || null, exported: new Date().toISOString() };
     const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
@@ -106,6 +170,27 @@ _JS = """
 
 def _attrs(**kw) -> str:
     return "".join(f' data-{k}="{html.escape(str(v), quote=True)}"' for k, v in kw.items() if v)
+
+
+def _phonetic_for_trigger(t: Trigger, profile: ReaderProfile) -> tuple[str, bool] | None:
+    """(respell, always) for a flagged-but-kept word, or None if the phonetic map is off
+    for this profile/kind/word. Mirrors the filtering `pronounce.phonetic_map()` does, but
+    works straight off the Trigger objects already carried by the rewrite result so it
+    stays exactly in step with what the reader view renders.
+    """
+    if profile.phonetic_map == "off":
+        return None
+    lw = t.text.lower()
+    if lw in {w.lower() for w in profile.safe_words}:
+        return None
+    is_personal = t.kind == "personal" and lw in {w.lower() for w in profile.trigger_words}
+    if t.kind not in set(profile.phonetic_map_kinds) and not is_personal:
+        return None
+    r = respell(t.text, pos=t.pos or None, tag=getattr(t, "tag", "") or None)
+    if r is None:
+        return None
+    always = profile.phonetic_map == "always" or t.kind in set(profile.phonetic_map_always_kinds) or is_personal
+    return r.respell, always
 
 
 def to_html(result: RewriteResult, profile: ReaderProfile, title: str = "Rewritten text") -> str:
@@ -128,9 +213,14 @@ def to_html(result: RewriteResult, profile: ReaderProfile, title: str = "Rewritt
                     )
                 elif kind == "note":
                     words += 1
+                    phon = _phonetic_for_trigger(val, profile)
+                    cls = "w note always" if phon and phon[1] else "w note"
+                    word_html = html.escape(val.text)
+                    if phon:
+                        word_html = f'<ruby>{word_html}<rt>{html.escape(phon[0])}</rt></ruby>'
                     buf.append(
-                        f'<span class="w note"{_attrs(why=val.reason, hint=val.hint, alts=", ".join(val.alternatives[:3]))}>'
-                        f'{html.escape(val.text)}</span>'
+                        f'<span class="{cls}"{_attrs(why=val.reason, hint=val.hint, respell=phon[0] if phon else "", alts=", ".join(val.alternatives[:3]))}>'
+                        f'{word_html}</span>'
                     )
                 elif kind == "break":
                     pass
@@ -155,18 +245,28 @@ def to_html(result: RewriteResult, profile: ReaderProfile, title: str = "Rewritt
   <span>{st.get('changes', 0)} changes · {st.get('sentences_changed', 0)}/{st.get('sentences', 0)} sentences · load {st.get('load_before', '?')} → {st.get('load_after', '?')}</span>
   <button id="toggleOrig">Show originals inline</button>
   <button id="togglePlain">Hide markings</button>
+  <label>Phonetic map:
+    <select id="pmToggle">
+      <option value="off">off</option>
+      <option value="on_demand">on demand</option>
+      <option value="always">always</option>
+    </select>
+  </label>
+  <button id="readAloud">Read aloud</button>
   <button id="timer">Start reading</button>
   <button id="export">Export feedback (<span id="count">0</span> marked)</button>
 </header>
 <main>
 {chr(10).join(parts)}
 </main>
-<footer>Underlined words were changed — hover or tap to see the original. Dotted words were flagged but kept; hover for a pronunciation cue.
-Click any marked word to record that it tripped you, then Export feedback and run <code>dysrewrite profile feedback</code> to teach your profile.
+<footer>Underlined words were changed — hover or tap to see the original. Dotted words were flagged but kept; hover for a pronunciation cue,
+and a small "ᴬᴮᶜ" respelling above the word when the phonetic map is on. Click any marked word to record that it tripped you, then Export
+feedback and run <code>dysrewrite profile feedback</code> to teach your profile.
 Made with dyslexic-rewrite (free, open source, runs on your own computer).</footer>
 <div id="tip"></div>
 <script>
 const WORDS = {words}; const PROFILE = {json.dumps(profile.name)}; const ENGINE = {json.dumps(result.engine)};
+const PHONETIC_MAP_MODE = {json.dumps(profile.phonetic_map)};
 {_JS}
 </script>
 </body>

@@ -75,6 +75,7 @@ def test_ab_test_flow(signed_in):
     assert {i["condition"] for i in t["items"]} == {"original", "rewritten"}
     assert all(len(i["questions"]) == 5 for i in t["items"])
     assert all("answer" not in q for i in t["items"] for q in i["questions"])
+    assert all("phonetic_map" in i and isinstance(i["phonetic_map"], list) for i in t["items"])
     rewritten = next(i for i in t["items"] if i["condition"] == "rewritten")
     assert any(s["t"] in ("change", "note") for s in rewritten["segments"])
     for i in t["items"]:
@@ -84,14 +85,32 @@ def test_ab_test_flow(signed_in):
         assert too_fast.status_code == 400
         res = c.post(f"/api/tests/{t['id']}/items/{i['index']}/finish",
                      json={"seconds": 90, "answers": {q["id"]: 1 for q in i["questions"]},
-                           "tripped": ["Harrow", "wind"], "ease": 4}).json()
+                           "tripped": ["Harrow", "wind"], "ease": 4, "read_aloud": i["index"] == 0}).json()
         assert res["total"] == 5 and 0 <= res["correct"] <= 5 and res["wpm"] > 0
         assert res["tripped"] == ["harrow", "wind"]
+        assert res["phonetic_map"] == "on_demand"
+        assert res["read_aloud"] == (i["index"] == 0)
     dup = c.post(f"/api/tests/{t['id']}/items/0/finish", json={"seconds": 90, "answers": {}, "tripped": [], "ease": 3})
     assert dup.status_code == 409
     results = c.get("/api/results").json()
     assert results["totals"]["original"]["n"] == 1 and results["totals"]["rewritten"]["n"] == 1
     assert results["tests"][0]["completed"] is True
+    again = c.get(f"/api/tests/{t['id']}").json()
+    assert again["items"][0]["result"]["phonetic_map"] == "on_demand"
+    assert again["items"][0]["result"]["read_aloud"] is True
+
+
+def test_phonetic_map_preference(signed_in):
+    c = signed_in
+    me = c.get("/api/me").json()
+    assert me["user"]["phonetic_map"] == "on_demand"  # default
+    bad = c.patch("/api/me", json={"phonetic_map": "nonsense"})
+    assert bad.status_code == 400
+    u = c.patch("/api/me", json={"phonetic_map": "always"}).json()["user"]
+    assert u["phonetic_map"] == "always"
+    r = c.post("/api/rewrite", json={"text": "Grandpa would wind the clock."}).json()
+    assert "phonetic_map" in r and isinstance(r["phonetic_map"], list)
+    c.patch("/api/me", json={"phonetic_map": "on_demand"})  # reset for later tests
 
 
 def test_triggers_and_read_anything(signed_in):

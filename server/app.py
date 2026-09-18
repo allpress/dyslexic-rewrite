@@ -63,7 +63,8 @@ def _user_json(u: dict) -> dict:
     with db.conn() as c:
         has = c.execute("SELECT 1 FROM profiles WHERE user_id = %s", (u["id"],)).fetchone() is not None
     return {"id": u["id"], "email": u["email"], "name": u["name"], "base_profile": u["base_profile"],
-            "onboarded": u["onboarded"], "has_personal_profile": has, "created_at": u["created_at"].isoformat()}
+            "onboarded": u["onboarded"], "has_personal_profile": has, "phonetic_map": u["phonetic_map"],
+            "created_at": u["created_at"].isoformat()}
 
 
 def current_user(request: Request) -> dict:
@@ -95,6 +96,7 @@ class MePatch(BaseModel):
     name: str | None = Field(default=None, max_length=80)
     base_profile: str | None = None
     onboarded: bool | None = None
+    phonetic_map: str | None = None
 
 
 class TextIn(BaseModel):
@@ -116,6 +118,7 @@ class FinishIn(BaseModel):
     answers: dict[str, int] = {}
     tripped: list[str] = []
     ease: int = Field(ge=1, le=5)
+    read_aloud: bool = False
 
 
 class FeedbackIn(BaseModel):
@@ -169,11 +172,14 @@ def me(u: dict = Depends(current_user)):
 def patch_me(body: MePatch, u: dict = Depends(current_user)):
     if body.base_profile is not None and body.base_profile not in BUILTIN_PROFILES:
         raise HTTPException(400, f"base_profile must be one of {list(BUILTIN_PROFILES)}")
+    if body.phonetic_map is not None and body.phonetic_map not in service.PHONETIC_MAP_MODES:
+        raise HTTPException(400, f"phonetic_map must be one of {list(service.PHONETIC_MAP_MODES)}")
     with db.conn() as c:
         c.execute(
             "UPDATE users SET name = COALESCE(%s, name), base_profile = COALESCE(%s, base_profile), "
-            "onboarded = COALESCE(%s, onboarded) WHERE id = %s",
-            (body.name.strip() if body.name else None, body.base_profile, body.onboarded, u["id"]),
+            "onboarded = COALESCE(%s, onboarded), phonetic_map = COALESCE(%s, phonetic_map) WHERE id = %s",
+            (body.name.strip() if body.name else None, body.base_profile, body.onboarded,
+             body.phonetic_map, u["id"]),
         )
         c.commit()
     if body.base_profile and body.base_profile != u["base_profile"]:
@@ -243,13 +249,16 @@ def _test_json(test_id: int, u: dict) -> dict:
     out_items = []
     for it in items:
         segs, _ = _build_item(it, it["condition"], profile)
+        phonetic_map = service.compute_phonetic_map(segs, profile, u["phonetic_map"])
         result = None
         if it["recorded_at"]:
             result = {"seconds": it["seconds"], "wpm": it["wpm"], "correct": it["correct"], "total": it["total"],
-                      "ease": it["ease"], "tripped": it["tripped"] or [], "recorded_at": it["recorded_at"].isoformat()}
+                      "ease": it["ease"], "tripped": it["tripped"] or [], "recorded_at": it["recorded_at"].isoformat(),
+                      "phonetic_map": it["phonetic_map"], "read_aloud": it["read_aloud"]}
         out_items.append({
             "index": it["idx"], "passage_id": it["passage_id"], "title": it["title"], "condition": it["condition"],
-            "words": it["words"], "segments": segs, "questions": _questions_public(it["questions"]), "result": result,
+            "words": it["words"], "segments": segs, "phonetic_map": phonetic_map,
+            "questions": _questions_public(it["questions"]), "result": result,
         })
     return {"id": t["id"], "pair": t["pair"], "created_at": t["created_at"].isoformat(),
             "completed": all(i["result"] for i in out_items), "items": out_items}
@@ -331,13 +340,14 @@ def finish_item(test_id: int, index: int, body: FinishIn, u: dict = Depends(curr
         now = datetime.now(timezone.utc)
         c.execute(
             "UPDATE test_items SET seconds=%s, wpm=%s, correct=%s, total=%s, ease=%s, tripped=%s, answers=%s, "
-            "recorded_at=%s WHERE test_id=%s AND idx=%s",
+            "recorded_at=%s, phonetic_map=%s, read_aloud=%s WHERE test_id=%s AND idx=%s",
             (body.seconds, wpm, correct, len(qs), body.ease, json.dumps(tripped), json.dumps(body.answers), now,
-             test_id, index),
+             u["phonetic_map"], body.read_aloud, test_id, index),
         )
         c.commit()
     return {"seconds": body.seconds, "wpm": wpm, "correct": correct, "total": len(qs), "ease": body.ease,
-            "tripped": tripped, "recorded_at": now.isoformat()}
+            "tripped": tripped, "recorded_at": now.isoformat(), "phonetic_map": u["phonetic_map"],
+            "read_aloud": body.read_aloud}
 
 
 @app.get("/api/results")
@@ -385,7 +395,9 @@ def rewrite_any(body: TextIn, u: dict | None = Depends(optional_user)):
         raise HTTPException(400, "That's a lot at once — try up to 20,000 characters.")
     profile, _ = service.get_profile(u["id"], u["base_profile"]) if u else (service.load_profile("default"), None)
     segs, stats = service.rewrite_text(text, profile)
-    return {"segments": segs, "stats": stats}
+    mode = u["phonetic_map"] if u else "on_demand"
+    phonetic_map = service.compute_phonetic_map(segs, profile, mode)
+    return {"segments": segs, "stats": stats, "phonetic_map": phonetic_map}
 
 
 @app.post("/api/feedback")

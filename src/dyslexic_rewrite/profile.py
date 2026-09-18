@@ -82,6 +82,17 @@ class ReaderProfile:
 
     style: StyleTargets = field(default_factory=StyleTargets)
 
+    # Phonetic map: a friendly respelling shown over words a reader might stumble on.
+    # "off" shows none, "on_demand" shows them on hover/tap (plus phonetic_map_always_kinds
+    # inline), "always" shows every one inline.
+    phonetic_map: str = "on_demand"
+    phonetic_map_kinds: list[str] = field(
+        default_factory=lambda: ["heteronym", "ambiguity", "personal", "rare", "long", "phonetic"]
+    )
+    phonetic_map_always_kinds: list[str] = field(
+        default_factory=lambda: ["heteronym", "ambiguity", "personal"]
+    )
+
     # ---- helpers -------------------------------------------------------------------------
 
     def weight(self, kind: str) -> float:

@@ -524,6 +524,80 @@ textarea {
   margin-left: auto;
 }
 
+/* --------------------------------------------------------- phonetic map */
+
+ruby {
+  ruby-position: over;
+}
+
+rt {
+  font-size: 0.6em;
+  font-weight: 400;
+  color: var(--muted);
+  letter-spacing: normal;
+  visibility: hidden;
+}
+
+.word:hover rt,
+.word:focus rt,
+.word:focus-within rt {
+  visibility: visible;
+}
+
+rt.rt--always,
+rt.rt--revealed {
+  visibility: visible;
+}
+
+/* Fixed line-height in "always" mode keeps text from jumping as respellings turn on/off. */
+.reader__text--always {
+  line-height: 2.6;
+}
+
+.tip__phon {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.tip__speak {
+  min-width: 32px;
+  min-height: 32px;
+  border: 2px solid var(--line);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.phon-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.phon-mode__label {
+  white-space: nowrap;
+}
+
+.phon-mode select {
+  min-height: 44px;
+  padding: 6px 10px;
+  font: inherit;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  color: var(--text);
+  background: var(--surface);
+  border: 2px solid var(--line);
+  border-radius: 8px;
+}
+
 /* ----------------------------------------------------------- example */
 
 .example {

@@ -20,5 +20,8 @@
   "trigger_words": [],
   "safe_words": [],
   "replacements": {},
-  "vocabulary": []
+  "vocabulary": [],
+  "phonetic_map": "always",
+  "phonetic_map_kinds": ["heteronym", "ambiguity", "personal", "rare", "long", "phonetic"],
+  "phonetic_map_always_kinds": ["heteronym", "ambiguity", "personal"]
 }

@@ -19,12 +19,15 @@ Privacy rules the server enforces:
 
 ## Me
 
-`User` = `{id, email, name, base_profile: "default"|"phonological"|"visual"|"attention", onboarded: bool, has_personal_profile: bool, created_at}`
+`User` = `{id, email, name, base_profile: "default"|"phonological"|"visual"|"attention", onboarded: bool, has_personal_profile: bool, phonetic_map: "off"|"on_demand"|"always", created_at}`
+
+`phonetic_map` is the reader's phonetic-map preference (see v0.3 below). It defaults to `on_demand`
+and lives directly on the user row, the same way `base_profile` does.
 
 | Method | Path | Body | Returns |
 | --- | --- | --- | --- |
 | GET | `/api/me` | — | `{user, profile: ProfileSummary | null}` (401 when signed out) |
-| PATCH | `/api/me` | `{name?, base_profile?, onboarded?}` | `{user}` |
+| PATCH | `/api/me` | `{name?, base_profile?, onboarded?, phonetic_map?}` | `{user}` |
 | POST | `/api/me/writing-sample` | `{text}` (>= 150 words) | `{style: StyleReport, profile: ProfileSummary}` |
 | POST | `/api/me/triggers` | `{add?: [word], remove?: [word], safe?: [word]}` | `{profile: ProfileSummary}` |
 | DELETE | `/api/me` | — | `{ok: true}` |
@@ -110,3 +113,43 @@ Rules the server enforces:
 
 Storage: files are written to `AUDIO_DIR` (default `./data/recordings`), one file per recording named
 `<user_id>/<uuid>.<ext>`. On Fly that directory lives on a mounted volume. Nothing else reads it.
+
+---
+
+# Phonetic map & read-aloud (v0.3)
+
+A friendly respelling (`in-TEN-shun`, `WYND` vs `WIND`) shown over words a reader might struggle
+with, computed with `dyslexic_rewrite.pronounce.phonetic_map` over the reader's own profile. If
+that module isn't installed, every `phonetic_map` field below is simply `[]` — nothing else
+changes.
+
+`PhoneticMapEntry` = `{start, end, word, respell, hint: string|null, kind, always: bool}`
+ - `start`/`end` are character offsets into the **served text**: every segment's `s` concatenated
+   in order, with each `{t: "para"}` break counted as two newlines (`"\n\n"`). This is the same
+   text the reader renders, so a client maps an entry back onto its segments by walking that same
+   concatenation.
+ - `always` marks entries a client should surface without interaction. It's `true` for every
+   entry when the reader's mode (below) is `"always"`, and also for a handful of kinds (true
+   heteronyms, personal trigger words) even outside that mode — so a client just checks
+   `always` and doesn't need to know the reader's mode to decide.
+
+Every place a passage body (original or rewritten) is served now also returns a `phonetic_map:
+[PhoneticMapEntry]` field, computed with the same profile used to build its `segments`:
+ - `TestItem.phonetic_map` (`POST /api/tests`, `GET /api/tests/{id}`)
+ - `POST /api/rewrite` → `{segments, stats, phonetic_map}`
+
+The reader's own display mode is `User.phonetic_map`, one of:
+ - `"off"` — never show a respelling.
+ - `"on_demand"` (default) — show a respelling only once the reader taps/hovers/focuses the word.
+ - `"always"` — show respellings for `always: true` entries all the time; the rest stay on-demand.
+
+It is read from `GET /api/me` and set with `PATCH /api/me {phonetic_map}`; signed-out readers of
+`/api/rewrite` get entries computed as if their mode were `"on_demand"`.
+
+`FinishIn` (`POST /api/tests/{id}/items/{index}/finish`) gains an optional `read_aloud: bool`
+(default `false`) — set it when the reader turned on read-aloud during that attempt. `ItemResult`
+gains `phonetic_map` (the mode that was active for the reader at the moment they finished) and
+`read_aloud`, so later analysis can compare outcomes across modes.
+
+Migration: `server/migrations/003_phonetic_map.sql` adds `users.phonetic_map` (`TEXT NOT NULL
+DEFAULT 'on_demand'`) and `test_items.phonetic_map` / `test_items.read_aloud`.

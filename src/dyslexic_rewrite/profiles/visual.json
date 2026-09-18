@@ -21,6 +21,9 @@
   "safe_words": [],
   "replacements": {},
   "vocabulary": [],
+  "phonetic_map": "on_demand",
+  "phonetic_map_kinds": ["heteronym", "ambiguity", "personal", "rare", "long", "phonetic"],
+  "phonetic_map_always_kinds": ["heteronym", "ambiguity", "personal"],
   "layout": {
     "font_size_px": 22,
     "line_height": 2.1,

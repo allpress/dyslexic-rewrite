@@ -8,6 +8,13 @@
 
 export type BaseProfile = 'default' | 'phonological' | 'visual' | 'attention';
 
+/**
+ * Reader's phonetic-map preference: 'off' never shows a respelling, 'on_demand' shows one only
+ * once the word is tapped/hovered/focused, 'always' pins the profile's "always" entries visible
+ * and leaves the rest on-demand.
+ */
+export type PhoneticMapMode = 'off' | 'on_demand' | 'always';
+
 export interface User {
   id: string;
   email: string;
@@ -15,6 +22,7 @@ export interface User {
   base_profile: BaseProfile;
   onboarded: boolean;
   has_personal_profile: boolean;
+  phonetic_map: PhoneticMapMode;
   created_at: string;
 }
 
@@ -61,6 +69,21 @@ export type Segment =
   | { t: 'para' }
   | { t: 'heading'; s: string };
 
+/**
+ * A respelling for one word (e.g. "in-TEN-shun", "WYND" vs "WIND"). `start`/`end` are character
+ * offsets into the *served* text — every segment's `s` concatenated in order, with each `para`
+ * break counted as two newlines. See `servedTextSpans` in components/Reader.tsx.
+ */
+export interface PhoneticMapEntry {
+  start: number;
+  end: number;
+  word: string;
+  respell: string;
+  hint: string | null;
+  kind: string;
+  always: boolean;
+}
+
 export interface Question {
   id: string;
   prompt: string;
@@ -75,6 +98,10 @@ export interface ItemResult {
   ease: number;
   tripped: string[];
   recorded_at: string;
+  /** The reader's phonetic-map mode at the moment this attempt was recorded. */
+  phonetic_map: PhoneticMapMode;
+  /** Whether the reader turned on read-aloud during this attempt. */
+  read_aloud: boolean;
 }
 
 export type Condition = 'original' | 'rewritten';
@@ -86,6 +113,7 @@ export interface TestItem {
   condition: Condition;
   words: number;
   segments: Segment[];
+  phonetic_map: PhoneticMapEntry[];
   questions: Question[];
   result: ItemResult | null;
 }
@@ -137,6 +165,7 @@ export interface RewriteStats {
 export interface RewriteResponse {
   segments: Segment[];
   stats: RewriteStats;
+  phonetic_map: PhoneticMapEntry[];
 }
 
 export interface MeResponse {
@@ -149,6 +178,8 @@ export interface FinishBody {
   answers: Record<string, number>;
   tripped: string[];
   ease: number;
+  /** Set true when the reader turned on read-aloud during this attempt. */
+  read_aloud?: boolean;
 }
 
 export class ApiError extends Error {
@@ -223,8 +254,12 @@ export const logout = () => post<{ ok: true }>('/auth/logout');
 
 export const getMe = () => request<MeResponse>('/me');
 
-export const patchMe = (patch: { name?: string; base_profile?: BaseProfile; onboarded?: boolean }) =>
-  request<{ user: User }>('/me', { method: 'PATCH', body: JSON.stringify(patch) });
+export const patchMe = (patch: {
+  name?: string;
+  base_profile?: BaseProfile;
+  onboarded?: boolean;
+  phonetic_map?: PhoneticMapMode;
+}) => request<{ user: User }>('/me', { method: 'PATCH', body: JSON.stringify(patch) });
 
 export const postWritingSample = (text: string) =>
   post<{ style: StyleReport; profile: ProfileSummary }>('/me/writing-sample', { text });

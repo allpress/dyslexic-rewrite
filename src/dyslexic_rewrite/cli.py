@@ -12,8 +12,11 @@ from . import __version__
 from .analyze import analyze
 from .io import read_text
 from .profile import BUILTIN_PROFILES, load_profile
+from .pronounce import respell
 from .render import write_outputs
 from .rewrite.engine import rewrite as _rewrite
+
+_PHONETIC_MAP_CHOICES = ["off", "on_demand", "always"]
 
 
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
@@ -40,9 +43,13 @@ def main():
               help=f"Built-in profile {BUILTIN_PROFILES} or path to a profile .json")
 @click.option("--json", "as_json", is_flag=True, help="Machine-readable output")
 @click.option("--show", type=int, default=25, show_default=True, help="How many triggers to list (0 = none, -1 = all)")
-def analyze_cmd(file, profile_name, as_json, show):
+@click.option("--phonetic-map", "phonetic_map", type=click.Choice(_PHONETIC_MAP_CHOICES), default=None,
+              help="Override the profile's phonetic map mode for this run")
+def analyze_cmd(file, profile_name, as_json, show, phonetic_map):
     """Find the words and sentence shapes that would trip a reader."""
     profile = load_profile(profile_name)
+    if phonetic_map:
+        profile.phonetic_map = phonetic_map
     text = read_text(file)
     report = analyze(text, profile)
     if as_json:
@@ -55,8 +62,10 @@ def analyze_cmd(file, profile_name, as_json, show):
         for t in items:
             alts = f"  → {', '.join(t.alternatives[:3])}" if t.alternatives else ""
             hint = f"  [{t.hint}]" if t.hint else ""
+            r = respell(t.text, pos=t.pos or None, tag=getattr(t, "tag", "") or None)
+            say = f"  (say: {r.respell})" if r else ""
             txt = t.text if len(t.text) <= 40 else t.text[:37] + "..."
-            click.echo(f"  {t.kind:<9} s{t.sent_index:<4} {txt!r:44} {t.reason}{alts}{hint}")
+            click.echo(f"  {t.kind:<9} s{t.sent_index:<4} {txt!r:44} {t.reason}{alts}{hint}{say}")
         if 0 < show < len(report.triggers):
             click.echo(f"  ... {len(report.triggers) - show} more (use --show -1)")
 
@@ -74,10 +83,14 @@ main.add_command(analyze_cmd, name="analyze")
 @click.option("-f", "--format", "formats", multiple=True, default=("html", "txt", "md"),
               type=click.Choice(["html", "txt", "md", "json"]), show_default=True)
 @click.option("--simplify-vocab", is_flag=True, help="Also swap rare/long words for plain ones when a safe one is known")
+@click.option("--phonetic-map", "phonetic_map", type=click.Choice(_PHONETIC_MAP_CHOICES), default=None,
+              help="Override the profile's phonetic map mode (off/on_demand/always) for this run")
 @click.option("-v", "--verbose", is_flag=True)
-def rewrite(file, profile_name, out_dir, engine, formats, simplify_vocab, verbose):
+def rewrite(file, profile_name, out_dir, engine, formats, simplify_vocab, phonetic_map, verbose):
     """Rewrite a .txt/.md/.html/.epub file and write an HTML reader view next to plain text."""
     profile = load_profile(profile_name)
+    if phonetic_map:
+        profile.phonetic_map = phonetic_map
     text = read_text(file)
     if not text.strip():
         raise click.ClickException("No text found in the file.")
@@ -211,6 +224,26 @@ def profile_add(profile_path, trigger, safe, replace):
     p.add_feedback(list(trigger), list(safe), repl)
     p.save(profile_path)
     click.echo(f"wrote {profile_path}: {len(p.trigger_words)} triggers, {len(p.safe_words)} safe, {len(p.replacements)} replacements")
+
+
+# --------------------------------------------------------------------------------------
+@main.command()
+@click.argument("word")
+@click.option("--pos", default=None, help="Coarse POS to pick a sense: VERB, NOUN, ADJ, ADV")
+@click.option("--tag", default=None, help="Fine-grained spaCy tag (e.g. VBD/VBP) for tense-based words like 'read'")
+def say(word, pos, tag):
+    """Print the friendly respelling for a word (handy for checking the phoneme table)."""
+    r = respell(word, pos=pos, tag=tag)
+    if r is None:
+        raise click.ClickException(
+            f"No pronunciation found for {word!r}. Is the 'cmudict' package installed, "
+            "and is this an English word?"
+        )
+    click.echo(r.respell)
+    if r.hint:
+        click.echo(f"hint: {r.hint}")
+    if r.ambiguous:
+        click.echo("(ambiguous: this word has more than one pronunciation; pass --pos or --tag to pick one)")
 
 
 # --------------------------------------------------------------------------------------

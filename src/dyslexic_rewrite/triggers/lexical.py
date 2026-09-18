@@ -65,7 +65,7 @@ def detect_heteronyms(doc, profile) -> list[Trigger]:
             kind="heteronym", sent_index=sidx.get(tok.i, 0),
             start=tok.idx, end=tok.idx + len(tok.text), text=tok.text,
             reason=f"'{tok.text}' has more than one pronunciation/meaning (used here as {pos.lower()})",
-            score=0.4, alternatives=alts, pos=pos, hint=hint,
+            score=0.4, alternatives=alts, pos=pos, tag=tok.tag_, hint=hint,
         ))
     return out
 
@@ -204,7 +204,7 @@ def detect_ambiguity(doc, profile) -> list[Trigger]:
                     kind="ambiguity", sent_index=si,
                     start=tok.idx, end=tok.idx + len(tok.text), text=tok.text, reason=reason,
                     score=0.8, alternatives=alts, related=[(ptok.idx, ptok.idx + len(ptok.text))],
-                    pos=sense[0], hint=_hint_for(lw, sense[0]),
+                    pos=sense[0], tag=tok.tag_, hint=_hint_for(lw, sense[0]),
                 ))
             else:
                 # the later use has no safe swap, but the earlier one does: defuse that one instead
@@ -214,7 +214,8 @@ def detect_ambiguity(doc, profile) -> list[Trigger]:
                     reason=(f"'{ptok.text}' is a {psense[0].lower()} here but a {sense[0].lower()} "
                             f"{si - psi} sentence(s) later — same spelling, different meaning"),
                     score=0.8, alternatives=_alts_for(lw, psense[0]),
-                    related=[(tok.idx, tok.idx + len(tok.text))], pos=psense[0], hint=_hint_for(lw, psense[0]),
+                    related=[(tok.idx, tok.idx + len(tok.text))], pos=psense[0], tag=ptok.tag_,
+                    hint=_hint_for(lw, psense[0]),
                 ))
         prior.append((tok, si, sense))
     return out
@@ -246,7 +247,7 @@ def detect_personal(doc, profile) -> list[Trigger]:
             kind="personal", sent_index=sidx.get(tok.i, 0),
             start=tok.idx, end=tok.idx + len(tok.text), text=tok.text,
             reason=f"'{tok.text}' is on this reader's trigger list",
-            score=1.0, alternatives=alts, pos=tok.pos_, hint=_hint_for(lw, tok.pos_),
+            score=1.0, alternatives=alts, pos=tok.pos_, tag=tok.tag_, hint=_hint_for(lw, tok.pos_),
         ))
     return out
 
@@ -272,6 +273,7 @@ def detect_rare(doc, profile) -> list[Trigger]:
                 start=tok.idx, end=tok.idx + len(tok.text), text=tok.text,
                 reason=f"'{tok.text}' is an uncommon word (frequency {z:.1f} on a 1–7 scale)",
                 score=min(1.0, (profile.min_zipf - z) / 2.0 + 0.3), alternatives=alts, pos=tok.pos_,
+                tag=tok.tag_,
             ))
     return out
 
@@ -289,7 +291,7 @@ def detect_long(doc, profile) -> list[Trigger]:
                 start=tok.idx, end=tok.idx + len(tok.text), text=tok.text,
                 reason=f"'{tok.text}' is {len(tok.text)} letters long",
                 score=min(1.0, 0.3 + (len(tok.text) - profile.max_word_length) * 0.1),
-                alternatives=_synonyms(tok, profile), pos=tok.pos_,
+                alternatives=_synonyms(tok, profile), pos=tok.pos_, tag=tok.tag_,
             ))
     return out
 

@@ -1,13 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import Reader from '../components/Reader';
+import Reader, { paragraphTexts } from '../components/Reader';
+import ReadAloudButton from '../components/ReadAloudButton';
+import PhoneticModeSelect from '../components/PhoneticModeSelect';
 import {
   ApiError,
   createTest,
   finishItem,
+  patchMe,
   postTriggers,
   startItem,
   type ItemResult,
+  type PhoneticMapMode,
   type Test,
 } from '../api';
 import { easeWord, verdict } from '../lib/verdict';
@@ -19,7 +23,29 @@ const EASE_LABELS = ['Very hard', 'Hard', 'Okay', 'Easy', 'Very easy'];
 
 export default function TestPage() {
   const navigate = useNavigate();
-  const { setProfile } = useMe();
+  const { user, profile, setProfile, setMe } = useMe();
+
+  const [phoneticMapMode, setPhoneticMapMode] = useState<PhoneticMapMode>(
+    user?.phonetic_map ?? 'on_demand',
+  );
+  const syncedPhoneticMode = useRef(false);
+  useEffect(() => {
+    if (user && !syncedPhoneticMode.current) {
+      syncedPhoneticMode.current = true;
+      setPhoneticMapMode(user.phonetic_map);
+    }
+  }, [user]);
+
+  async function changePhoneticMode(mode: PhoneticMapMode) {
+    setPhoneticMapMode(mode);
+    if (!user) return;
+    try {
+      const res = await patchMe({ phonetic_map: mode });
+      setMe({ user: res.user, profile });
+    } catch {
+      // The reader still sees the mode change locally even if saving the preference fails.
+    }
+  }
 
   const [test, setTest] = useState<Test | null>(null);
   const [index, setIndex] = useState(0);
@@ -34,6 +60,7 @@ export default function TestPage() {
   const [qIndex, setQIndex] = useState(0);
   const [tripped, setTripped] = useState<Map<string, string>>(new Map());
   const [showMarks, setShowMarks] = useState(false); // hidden by default during a test
+  const [readAloudUsed, setReadAloudUsed] = useState(false); // never on unless the reader opts in
 
   const [results, setResults] = useState<(ItemResult | null)[]>([null, null]);
   const [allTripped, setAllTripped] = useState<string[]>([]);
@@ -70,6 +97,7 @@ export default function TestPage() {
     setQIndex(0);
     setTripped(new Map());
     setShowMarks(false);
+    setReadAloudUsed(false);
   }
 
   const item = test?.items[index];
@@ -117,7 +145,13 @@ export default function TestPage() {
     setError(null);
     const words = Array.from(new Set(tripped.values())).filter(Boolean);
     try {
-      const result = await finishItem(test.id, index, { seconds, answers, tripped: words, ease });
+      const result = await finishItem(test.id, index, {
+        seconds,
+        answers,
+        tripped: words,
+        ease,
+        read_aloud: readAloudUsed,
+      });
       setResults((prev) => {
         const next = [...prev];
         next[index] = result;
@@ -232,6 +266,11 @@ export default function TestPage() {
             Passage {index + 1} of {test.items.length}
           </span>
           <span className="reader-toolbar__spacer" />
+          <PhoneticModeSelect value={phoneticMapMode} onChange={(m) => void changePhoneticMode(m)} />
+          <ReadAloudButton
+            paragraphs={paragraphTexts(item.segments)}
+            onFirstUse={() => setReadAloudUsed(true)}
+          />
           <button
             className="btn btn--plain btn--small"
             type="button"
@@ -247,6 +286,8 @@ export default function TestPage() {
           showMarks={showMarks}
           tripped={new Set(tripped.keys())}
           onToggleWord={toggleWord}
+          phoneticMap={item.phonetic_map}
+          phoneticMapMode={phoneticMapMode}
         />
 
         <button className="btn btn--wide" type="button" onClick={handleDoneReading}>

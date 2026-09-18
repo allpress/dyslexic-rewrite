@@ -23,6 +23,7 @@ class Trigger:
     alternatives: list[str] = field(default_factory=list)   # plain-word options, best first
     related: list[tuple[int, int]] = field(default_factory=list)  # other spans involved (e.g. the clashing word)
     pos: str = ""                 # coarse POS of the flagged token, when it is a single token
+    tag: str = ""                 # fine-grained spaCy tag (e.g. VBD), when it is a single token
     hint: str = ""                # pronunciation / stress cue shown on demand, e.g. "rhymes with 'find'"
 
     @property
