@@ -40,7 +40,8 @@ Research and the full test/converter plan: [docs/RESEARCH.md](docs/RESEARCH.md).
 - [ ] Browser screening battery on unwindwords.com (≈10 min, static stimuli, no AI): heteronym probe (H) and typed spelling dictation (B) first, then orthographic choice, pseudohomophone decision, VAS whole report, backward digit span, RAN via the recorder
 - [ ] `dysrewrite assess --from results.json`: battery scores → profile weights (mapping in RESEARCH.md §3)
 - [ ] Axes instead of types: phonological, orthographic, VAS, RAN/rate, attention — weights, not categories
-- [ ] Text-to-speech button in the reader (strongest-evidenced accommodation in the literature)
+- [x] Text-to-speech button in the reader (strongest-evidenced accommodation in the literature)
+- [x] Phonetic map: friendly respellings (`WYND` / `WIND`, `in-TEN-shun`) over trigger words, off / on demand / always, in the CLI reader and on the site; the A/B test records the mode so it can be measured as its own lever
 - [ ] `annotate_instead_of_replace` profile flag (Rello's "simplify or help?" finding)
 - [ ] Documented cheap hosted tier: DeepSeek `deepseek-flash` behind the fidelity gate (~$0.10 per book), cost estimate printed before a whole-book run
 - [ ] Layout controls per profile: chunking, syllable breaks, line length, colour (comfort only — no overlay/font claims)
