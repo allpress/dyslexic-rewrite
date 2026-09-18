@@ -52,3 +52,4 @@ jobs:
       - run: pytest -q tests/test_server.py
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/dysrewrite
+          WARM_SAMPLES: "0"   # the cache tests warm what they need; no background spaCy thread at exit

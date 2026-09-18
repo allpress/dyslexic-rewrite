@@ -45,8 +45,15 @@ async def _lifespan(_: FastAPI):
         passages.seed(c)
     if applied:
         print("migrations applied:", ", ".join(applied))
-    threading.Thread(target=_warm_sample_cache, daemon=True).start()
+    warm: threading.Thread | None = None
+    if os.environ.get("WARM_SAMPLES", "1") == "1":
+        warm = threading.Thread(target=_warm_sample_cache, daemon=True)
+        warm.start()
     yield
+    # Let the warm-up finish before the pool goes away: tearing the process down while spaCy
+    # is mid-parse on another thread makes BLIS abort at exit (seen in CI).
+    if warm is not None and warm.is_alive():
+        warm.join(timeout=120)
     db.close()
 
 
