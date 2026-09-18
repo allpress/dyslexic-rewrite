@@ -35,11 +35,16 @@ Outcome: a CLI that takes a .txt/.md/.html/.epub and produces a rewritten copy p
 ## Phase 2 — Dyslexia-type profiles
 
 Outcome: built-in profiles for the main patterns, validated with real readers.
+Research and the full test/converter plan: [docs/RESEARCH.md](docs/RESEARCH.md).
 
-- [ ] A 10-minute self-assessment (`dysrewrite assess`) that suggests a starting profile from a few short reading tasks
-- [ ] Layout controls per profile: chunking, syllable breaks, line length, colour
-- [ ] Type profiles reviewed against the literature and against at least five readers each
-- [ ] Done when: three profiles, each measurably better than `default` for the readers it targets
+- [ ] Browser screening battery on unwindwords.com (≈10 min, static stimuli, no AI): heteronym probe (H) and typed spelling dictation (B) first, then orthographic choice, pseudohomophone decision, VAS whole report, backward digit span, RAN via the recorder
+- [ ] `dysrewrite assess --from results.json`: battery scores → profile weights (mapping in RESEARCH.md §3)
+- [ ] Axes instead of types: phonological, orthographic, VAS, RAN/rate, attention — weights, not categories
+- [ ] Text-to-speech button in the reader (strongest-evidenced accommodation in the literature)
+- [ ] `annotate_instead_of_replace` profile flag (Rello's "simplify or help?" finding)
+- [ ] Documented cheap hosted tier: DeepSeek `deepseek-flash` behind the fidelity gate (~$0.10 per book), cost estimate printed before a whole-book run
+- [ ] Layout controls per profile: chunking, syllable breaks, line length, colour (comfort only — no overlay/font claims)
+- [ ] Done when: the axis profile from the battery predicts which rewrite lever produced a reader's speed gain, across at least six readers × six passage pairs
 
 ## Phase 3 — Individual tuning
 
@@ -49,7 +54,7 @@ Outcome: a profile learned from the reader's own writing and speech that beats t
 - [ ] Rewrite *toward* the reader's style: choose among candidate rewrites by similarity to their sentences
 - [ ] Speech input via local Whisper (`--audio`) — speaking is often closer to how a dyslexic person thinks than their writing is
 - [ ] Feedback loop tightened: tripped words raise the weight of the whole trigger family they belong to, not just the word
-- [ ] Optional small local model fine-tuned on (original → what she found easy) pairs once there are a few hundred of them
+- [ ] Log (original sentence, rewritten sentence, reader verdict) pairs; LoRA-tune a 0.5–2B model on them once there are a few thousand — fine-tuned small models beat prompted cheap LLMs on simplification (RESEARCH.md §4, Tier 3)
 - [ ] Done when: the personal profile measurably beats the type profile for that reader
 
 ## Phase 4 — Measurement and community

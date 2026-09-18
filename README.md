@@ -98,9 +98,12 @@ stay in range, otherwise that paragraph falls back to the rule engine.
 ```bash
 ollama pull llama3.1:8b
 dysrewrite rewrite chapter.txt --engine llm -p her.json
-# or point elsewhere:
-DYSREWRITE_LLM_BASE_URL=https://api.example.com/v1 DYSREWRITE_LLM_MODEL=... DYSREWRITE_LLM_API_KEY=... dysrewrite rewrite ...
+# or the cheapest hosted option we have costed (about $0.10 per 90,000-word book, Sept 2026):
+DYSREWRITE_LLM_BASE_URL=https://api.deepseek.com/v1 DYSREWRITE_LLM_MODEL=deepseek-flash DYSREWRITE_LLM_API_KEY=sk-... \
+  dysrewrite rewrite book.epub --engine llm -p her.json
 ```
+
+Which model, what it costs, and why a small fine-tuned model is the end state: [docs/RESEARCH.md](docs/RESEARCH.md) §4.
 
 ## How it works
 
