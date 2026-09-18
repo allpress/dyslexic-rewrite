@@ -436,3 +436,142 @@ export function uploadRecording(
 /* -------------------------------------------------------------- health */
 
 export const getHealth = () => request<{ ok: true; version: string }>('/health');
+
+/* --------------------------------------------------- "which kind of reader am I?" battery */
+// See server/API.md, "which kind of reader am I? battery (v0.4)".
+
+export interface BatteryChecklist {
+  scale: string[];
+  items: { id: string; axis: string; prompt: string }[];
+  comfort_items: { id: string; prompt: string }[];
+}
+
+export interface BatterySpellingItem {
+  id: string;
+  word: string;
+  kind: 'regular' | 'irregular' | 'nonword';
+}
+
+export interface BatterySpelling {
+  speech_rate: number;
+  items: BatterySpellingItem[];
+}
+
+export interface BatteryChoiceItem {
+  id: string;
+  left: string;
+  right: string;
+  correct: 'left' | 'right';
+}
+
+export interface BatteryVasTrial {
+  id: string;
+  letters: string[];
+  practice: boolean;
+}
+
+export interface BatteryDigitTrial {
+  id: string;
+  length: number;
+  digits: number[];
+}
+
+export interface BatteryHeteronymQuestion {
+  prompt: string;
+  answer: boolean;
+}
+
+export interface BatteryHeteronymItem {
+  id: string;
+  pair_id: string;
+  condition: 'target' | 'control';
+  words: string[];
+  critical_index: number;
+  question: BatteryHeteronymQuestion | null;
+}
+
+export interface BatteryItems {
+  checklist: BatteryChecklist;
+  spelling: BatterySpelling;
+  orthographic_choice: BatteryChoiceItem[];
+  pseudohomophone: BatteryChoiceItem[];
+  vas: BatteryVasTrial[];
+  digit_span: BatteryDigitTrial[];
+  heteronym: BatteryHeteronymItem[];
+}
+
+export interface BatteryChoiceTrial {
+  id: string;
+  correct: boolean;
+  rt_ms: number;
+}
+
+/** One task's raw result. Every key is optional -- a reader can skip any task. */
+export interface BatteryRaw {
+  checklist?: { answers: Record<string, number>; comfort: Record<string, number> };
+  spelling?: { trials: { id: string; word: string; kind: string; response: string }[] };
+  orthographic_choice?: { trials: BatteryChoiceTrial[] };
+  pseudohomophone?: { trials: BatteryChoiceTrial[] };
+  vas?: { trials: { id: string; correct_letters: number; practice: boolean }[] };
+  digit_span?: { span: number };
+  heteronym?: {
+    trials: {
+      id: string;
+      pair_id: string;
+      condition: 'target' | 'control';
+      critical_index: number;
+      word_rts: number[];
+    }[];
+  };
+}
+
+export interface BatteryAxisScore {
+  id: string;
+  label: string;
+  support: number;
+  confidence: 'low' | 'normal';
+  detail: Record<string, unknown>;
+}
+
+export interface BatteryHeteronymResult {
+  slowdown_ms: number | null;
+  slowdown_ratio: number | null;
+  reliable: boolean;
+  pairs_scored: number;
+}
+
+export interface BatteryResult {
+  axes: BatteryAxisScore[];
+  comfort: { support: number; confidence: 'low' | 'normal'; detail: Record<string, unknown> };
+  heteronym: BatteryHeteronymResult;
+}
+
+export interface BatteryRun {
+  id: string;
+  started_at: string;
+  finished_at: string | null;
+  raw: BatteryRaw;
+  scores: BatteryResult | null;
+}
+
+export const getBatteryItems = () => request<BatteryItems>('/battery/items');
+
+/** Score a raw result set without saving it -- how an anonymous reader sees their radar. */
+export const scoreBattery = (raw: BatteryRaw) => post<BatteryResult>('/battery/score', { raw });
+
+export const createBatteryRun = () => post<BatteryRun>('/battery/runs');
+
+export const getBatteryRun = (id: string) => request<BatteryRun>(`/battery/runs/${encodeURIComponent(id)}`);
+
+export const patchBatteryRun = (id: string, patch: BatteryRaw) =>
+  request<BatteryRun>(`/battery/runs/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  });
+
+export const finishBatteryRun = (id: string) => post<BatteryRun>(`/battery/runs/${encodeURIComponent(id)}/finish`);
+
+export const applyBatteryRun = (id: string) =>
+  post<{ profile: ProfileSummary }>(`/battery/runs/${encodeURIComponent(id)}/apply`);
+
+export const getLatestBatteryRun = () => request<{ run: BatteryRun | null }>('/battery/latest');

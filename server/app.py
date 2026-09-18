@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 from dyslexic_rewrite import __version__
 from dyslexic_rewrite.profile import BUILTIN_PROFILES
 
-from . import auth, cache, db, passages, prompts, samples, service, storage
+from . import auth, battery_items, cache, db, passages, prompts, samples, service, storage
 
 app = FastAPI(title="Unwind Words", version=__version__, docs_url=None, redoc_url=None)
 SECURE_COOKIES = os.environ.get("SECURE_COOKIES", "1") == "1"
@@ -539,6 +539,120 @@ def delete_recording(recording_id: int, u: dict = Depends(current_user)):
         raise HTTPException(404, "No such recording.")
     storage.delete(r["storage_key"])
     return {"ok": True}
+
+
+# ---------------------------------------------------------------------------------------
+# "which kind of reader am I?" battery (docs/RESEARCH.md section 3) -- no AI, static stimuli,
+# deterministic scoring in dyslexic_rewrite.assess. Anonymous readers can take the whole battery
+# and see their radar; only starting/saving a run requires signing in (FEATURE spec).
+# ---------------------------------------------------------------------------------------
+class BatteryPatchIn(BaseModel):
+    checklist: dict | None = None
+    spelling: dict | None = None
+    orthographic_choice: dict | None = None
+    pseudohomophone: dict | None = None
+    vas: dict | None = None
+    digit_span: dict | None = None
+    heteronym: dict | None = None
+
+    def as_raw_patch(self) -> dict[str, Any]:
+        return {k: v for k, v in self.model_dump().items() if v is not None}
+
+
+class BatteryScoreIn(BaseModel):
+    raw: dict[str, Any] = {}
+
+
+def _battery_run_json(r: dict) -> dict:
+    return {
+        "id": r["id"], "started_at": r["started_at"].isoformat(),
+        "finished_at": r["finished_at"].isoformat() if r["finished_at"] else None,
+        "raw": r["raw"], "scores": r["scores"],
+    }
+
+
+def _own_battery_run(c, run_id: int, user_id: int) -> dict:
+    r = c.execute("SELECT * FROM battery_runs WHERE id = %s AND user_id = %s", (run_id, user_id)).fetchone()
+    if not r:
+        raise HTTPException(404, "No such battery run.")
+    return r
+
+
+@app.get("/api/battery/items")
+def battery_items_endpoint():
+    """All stimuli for one attempt, randomised per call. Anonymous readers get the same thing."""
+    return battery_items.build_items()
+
+
+@app.post("/api/battery/score")
+def battery_score(body: BatteryScoreIn):
+    """Score a raw result set without saving anything -- how an anonymous reader sees their radar."""
+    return service.score_battery_raw(body.raw).to_dict()
+
+
+@app.post("/api/battery/runs", status_code=201)
+def create_battery_run(u: dict = Depends(current_user)):
+    with db.conn() as c:
+        r = c.execute(
+            "INSERT INTO battery_runs (user_id, raw) VALUES (%s, '{}'::jsonb) RETURNING *", (u["id"],),
+        ).fetchone()
+        c.commit()
+    return _battery_run_json(r)
+
+
+@app.get("/api/battery/runs/{run_id}")
+def get_battery_run(run_id: int, u: dict = Depends(current_user)):
+    with db.conn() as c:
+        r = _own_battery_run(c, run_id, u["id"])
+    return _battery_run_json(r)
+
+
+@app.patch("/api/battery/runs/{run_id}")
+def patch_battery_run(run_id: int, body: BatteryPatchIn, u: dict = Depends(current_user)):
+    patch = body.as_raw_patch()
+    with db.conn() as c:
+        _own_battery_run(c, run_id, u["id"])
+        r = c.execute(
+            "UPDATE battery_runs SET raw = raw || %s::jsonb WHERE id = %s AND user_id = %s RETURNING *",
+            (json.dumps(patch), run_id, u["id"]),
+        ).fetchone()
+        c.commit()
+    return _battery_run_json(r)
+
+
+@app.post("/api/battery/runs/{run_id}/finish")
+def finish_battery_run(run_id: int, u: dict = Depends(current_user)):
+    with db.conn() as c:
+        r = _own_battery_run(c, run_id, u["id"])
+        scores = service.score_battery_raw(r["raw"]).to_dict()
+        now = datetime.now(timezone.utc)
+        r = c.execute(
+            "UPDATE battery_runs SET scores = %s, finished_at = COALESCE(finished_at, %s) "
+            "WHERE id = %s AND user_id = %s RETURNING *",
+            (json.dumps(scores), now, run_id, u["id"]),
+        ).fetchone()
+        c.commit()
+    return _battery_run_json(r)
+
+
+@app.post("/api/battery/runs/{run_id}/apply")
+def apply_battery_run(run_id: int, u: dict = Depends(current_user)):
+    with db.conn() as c:
+        r = _own_battery_run(c, run_id, u["id"])
+    if not r["scores"]:
+        raise HTTPException(400, "Finish the battery before applying it to your profile.")
+    profile = service.apply_battery(u["id"], u["base_profile"], r["raw"])
+    return {"profile": service.profile_summary(profile, u["base_profile"])}
+
+
+@app.get("/api/battery/latest")
+def latest_battery_run(u: dict = Depends(current_user)):
+    with db.conn() as c:
+        r = c.execute(
+            "SELECT * FROM battery_runs WHERE user_id = %s AND finished_at IS NOT NULL "
+            "ORDER BY finished_at DESC LIMIT 1", (u["id"],),
+        ).fetchone()
+    return {"run": _battery_run_json(r) if r else None}
 
 
 # ---------------------------------------------------------------------------------------

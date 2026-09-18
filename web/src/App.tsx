@@ -11,6 +11,7 @@ import Results from './pages/Results';
 import ReadAnything from './pages/Read';
 import Record from './pages/Record';
 import Profile from './pages/Profile';
+import Assess from './pages/Assess';
 import NotFound from './pages/NotFound';
 
 export default function App() {
@@ -19,7 +20,7 @@ export default function App() {
   // A 401 on a signed-in-only page sends the reader to sign in. Public pages (landing, read,
   // sign-in) probe /api/me for signed-out visitors too, and that 401 is expected.
   useEffect(() => {
-    const publicPaths = new Set(['/', '/signin', '/read']);
+    const publicPaths = new Set(['/', '/signin', '/read', '/assess']);
     setUnauthorizedHandler(() => {
       if (!publicPaths.has(window.location.pathname)) navigate('/signin', { replace: true });
     });
@@ -60,6 +61,7 @@ export default function App() {
           }
         />
         <Route path="/read" element={<ReadAnything />} />
+        <Route path="/assess" element={<Assess />} />
         <Route
           path="/record"
           element={

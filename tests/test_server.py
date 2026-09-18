@@ -211,3 +211,133 @@ def test_delete_account(signed_in):
     c = signed_in
     assert c.delete("/api/me").json()["ok"] is True
     assert c.get("/api/me").status_code == 401
+
+
+# ---------------------------------------------------------------------------------------
+# "which kind of reader am I?" battery
+# ---------------------------------------------------------------------------------------
+
+BATTERY_EMAIL = "pytest-battery@example.com"
+
+
+@pytest.fixture(scope="module")
+def battery_client(client):
+    r = client.post("/api/auth/request-code", json={"email": BATTERY_EMAIL}).json()
+    ok = client.post("/api/auth/verify", json={"email": BATTERY_EMAIL, "code": r["dev_code"]})
+    assert ok.status_code == 200
+    yield client
+    client.delete("/api/me")
+
+
+def _perfect_raw(items: dict) -> dict:
+    """Build a raw result set that answers every item in `items` correctly and quickly."""
+    spelling = {"trials": [
+        {"id": it["id"], "word": it["word"], "kind": it["kind"], "response": it["word"]}
+        for it in items["spelling"]["items"]
+    ]}
+    orthographic_choice = {"trials": [
+        {"id": it["id"], "correct": True, "rt_ms": 900} for it in items["orthographic_choice"]
+    ]}
+    pseudohomophone = {"trials": [
+        {"id": it["id"], "correct": True, "rt_ms": 900} for it in items["pseudohomophone"]
+    ]}
+    vas = {"trials": [
+        {"id": it["id"], "correct_letters": 5, "practice": it["practice"]} for it in items["vas"]
+    ]}
+    digit_span = {"span": 7}
+    by_pair: dict[str, list[dict]] = {}
+    for it in items["heteronym"]:
+        by_pair.setdefault(it["pair_id"], []).append(it)
+    heteronym_trials = []
+    for pair_id, trials in by_pair.items():
+        for it in trials:
+            n = len(it["words"])
+            heteronym_trials.append({
+                "id": it["id"], "pair_id": pair_id, "condition": it["condition"],
+                "critical_index": it["critical_index"], "word_rts": [300.0] * n,
+            })
+    heteronym = {"trials": heteronym_trials}
+    checklist = {
+        "answers": {f"c{i}": 1 for i in range(1, 11)},
+        "comfort": {"v1": 1, "v2": 1, "v3": 1},
+    }
+    return {
+        "checklist": checklist, "spelling": spelling, "orthographic_choice": orthographic_choice,
+        "pseudohomophone": pseudohomophone, "vas": vas, "digit_span": digit_span, "heteronym": heteronym,
+    }
+
+
+def test_battery_items_anonymous_ok(client):
+    with TestClient(app) as anon:
+        items = anon.get("/api/battery/items").json()
+    assert len(items["spelling"]["items"]) == 20
+    assert len(items["orthographic_choice"]) == 24
+    assert len(items["pseudohomophone"]) == 24
+    assert len(items["vas"]) == 22
+    assert len(items["heteronym"]) == 24
+    assert len(items["checklist"]["items"]) == 10
+    assert len(items["checklist"]["comfort_items"]) == 3
+
+
+def test_battery_anonymous_score_without_saving(client):
+    with TestClient(app) as anon:
+        items = anon.get("/api/battery/items").json()
+        result = anon.post("/api/battery/score", json={"raw": _perfect_raw(items)})
+        assert result.status_code == 200
+        body = result.json()
+        assert len(body["axes"]) == 5
+        assert all(a["confidence"] == "normal" for a in body["axes"])
+        # anonymous readers can score, but never start a saved run
+        assert anon.post("/api/battery/runs").status_code == 401
+
+
+def test_battery_requires_login_to_start_but_not_to_see_items(battery_client):
+    c = battery_client
+    items = c.get("/api/battery/items").json()
+    run = c.post("/api/battery/runs").json()
+    assert run["finished_at"] is None and run["scores"] is None
+
+    # PATCH one task at a time, the way the stepper UI will.
+    p1 = c.patch(f"/api/battery/runs/{run['id']}", json={"checklist": {
+        "answers": {f"c{i}": 1 for i in range(1, 11)}, "comfort": {"v1": 1, "v2": 1, "v3": 1},
+    }})
+    assert p1.status_code == 200 and "checklist" in p1.json()["raw"]
+
+    raw = _perfect_raw(items)
+    for task in ("spelling", "orthographic_choice", "pseudohomophone", "vas", "digit_span", "heteronym"):
+        r = c.patch(f"/api/battery/runs/{run['id']}", json={task: raw[task]})
+        assert r.status_code == 200
+    got = c.get(f"/api/battery/runs/{run['id']}").json()
+    assert set(got["raw"].keys()) >= {"checklist", "spelling", "orthographic_choice",
+                                       "pseudohomophone", "vas", "digit_span", "heteronym"}
+
+    finished = c.post(f"/api/battery/runs/{run['id']}/finish").json()
+    assert finished["finished_at"] is not None
+    assert len(finished["scores"]["axes"]) == 5
+    assert finished["scores"]["heteronym"]["reliable"] is False  # no slowdown in the perfect run
+
+    latest = c.get("/api/battery/latest").json()
+    assert latest["run"]["id"] == run["id"]
+
+    assert c.get("/api/me").json()["user"]["has_personal_profile"] is False
+    applied = c.post(f"/api/battery/runs/{run['id']}/apply").json()
+    assert "min_zipf" in applied["profile"]
+    me = c.get("/api/me").json()
+    assert me["user"]["has_personal_profile"] is True
+    assert me["profile"]["min_zipf"] == applied["profile"]["min_zipf"]
+
+
+def test_battery_apply_requires_finish_first(battery_client):
+    c = battery_client
+    run = c.post("/api/battery/runs").json()
+    r = c.post(f"/api/battery/runs/{run['id']}/apply")
+    assert r.status_code == 400
+
+
+def test_battery_run_is_scoped_to_its_owner(battery_client):
+    run = battery_client.post("/api/battery/runs").json()
+    with TestClient(app) as other:
+        r = other.post("/api/auth/request-code", json={"email": "pytest-battery-2@example.com"}).json()
+        other.post("/api/auth/verify", json={"email": "pytest-battery-2@example.com", "code": r["dev_code"]})
+        assert other.get(f"/api/battery/runs/{run['id']}").status_code == 404
+        other.delete("/api/me")
