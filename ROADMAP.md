@@ -37,9 +37,10 @@ Outcome: a CLI that takes a .txt/.md/.html/.epub and produces a rewritten copy p
 Outcome: built-in profiles for the main patterns, validated with real readers.
 Research and the full test/converter plan: [docs/RESEARCH.md](docs/RESEARCH.md).
 
-- [ ] Browser screening battery on unwindwords.com (≈10 min, static stimuli, no AI): heteronym probe (H) and typed spelling dictation (B) first, then orthographic choice, pseudohomophone decision, VAS whole report, backward digit span, RAN via the recorder
-- [ ] `dysrewrite assess --from results.json`: battery scores → profile weights (mapping in RESEARCH.md §3)
-- [ ] Axes instead of types: phonological, orthographic, VAS, RAN/rate, attention — weights, not categories
+- [x] Browser screening battery on unwindwords.com/assess (≈10 min, static stimuli, no AI): checklist, spelling dictation, orthographic choice, pseudohomophone decision, VAS whole report, backward digit span, heteronym probe; result shown as a five-axis radar in plain words
+- [ ] RAN (test G) via the recorder, scored offline
+- [x] `dysrewrite assess --from results.json`: battery scores → profile weights (mapping in RESEARCH.md §3; anchors provisional until re-scored on real data)
+- [x] Axes instead of types: phonological, orthographic, VAS, rate, attention — weights, not categories
 - [x] Text-to-speech button in the reader (strongest-evidenced accommodation in the literature)
 - [x] Phonetic map: friendly respellings (`WYND` / `WIND`, `in-TEN-shun`) over trigger words, off / on demand / always, in the CLI reader and on the site; the A/B test records the mode so it can be measured as its own lever
 - [ ] `annotate_instead_of_replace` profile flag (Rello's "simplify or help?" finding)
@@ -60,7 +61,8 @@ Outcome: a profile learned from the reader's own writing and speech that beats t
 
 ## Phase 4 — Measurement and community
 
-- [ ] Built-in A/B reading test: same passage, original vs rewritten, timer + 5 questions, results stored locally
+- [x] Built-in A/B reading test on the site: matched passage pairs, original vs rewritten, timer + 5 questions
+- [x] Sample books on /read (Gutenberg excerpts) with a Postgres rewrite cache so nothing is regenerated twice
 - [ ] Opt-in anonymised result sharing so the project can publish what actually helps
 - [ ] Browser extension that rewrites the page you are on
 - [ ] E-reader export (EPUB/Kindle) and a simple web UI
