@@ -258,5 +258,51 @@ def demo():
         click.echo(f"\n=== {name} ===\n{r.text}\n{r.stats}")
 
 
+# --------------------------------------------------------------------------------------
+@main.command()
+@click.option("--from", "results_path", required=True, type=click.Path(exists=True, dir_okay=False),
+              help="Raw battery results JSON (see server/API.md, 'which kind of reader am I?')")
+@click.option("-p", "--profile", "profile_name", default="default", show_default=True,
+              help=f"Base profile to fold the result onto: {BUILTIN_PROFILES} or a path to a profile .json")
+@click.option("-o", "--out", "out_path", default="profile.json", show_default=True)
+def assess(results_path, profile_name, out_path):
+    """Score a browser-battery result file into axes, and write a reader profile.
+
+    A first cut, not a validated instrument (docs/RESEARCH.md, section 3) -- this reports axes,
+    never a diagnosis.
+    """
+    from .assess import AXIS_LABELS, profile_from_scores, score_battery
+    raw = json.loads(Path(results_path).read_text(encoding="utf-8"))
+    scores = score_battery(raw)
+    base = load_profile(profile_name)
+    profile = profile_from_scores(scores, base)
+    profile.save(out_path)
+
+    click.echo("Axes (0 = no extra support needed, 100 = a lot):\n")
+    for axis_id in ("phonological", "orthographic", "rate", "vas", "attention"):
+        axis = scores.axis(axis_id)
+        bar_len = round(axis.support / 100 * 30)
+        bar = "#" * bar_len + "-" * (30 - bar_len)
+        low = "  (low confidence -- this task was skipped)" if axis.confidence == "low" else ""
+        click.echo(f"  {AXIS_LABELS[axis_id]:<32} [{bar}] {axis.support:5.1f}{low}")
+
+    click.echo(f"\n  {'Visual comfort (self-report only)':<32} [{'#' * round(scores.comfort.support / 100 * 30):-<30}] {scores.comfort.support:5.1f}")
+
+    h = scores.heteronym
+    if h.reliable:
+        click.echo(f"\nTricky-word slowdown: {h.slowdown_ms:.0f}ms ({h.slowdown_ratio:.0%} slower) over "
+                    f"{h.pairs_scored} matched pairs -- reliable.")
+    elif h.slowdown_ms is not None:
+        click.echo(f"\nTricky-word slowdown: {h.slowdown_ms:.0f}ms over {h.pairs_scored} matched pairs "
+                    "-- not reliable enough to act on.")
+    else:
+        click.echo("\nTricky-word slowdown: not measured (task H was skipped).")
+
+    click.echo(f"\nwrote {out_path}")
+
+
+main.add_command(assess, name="assess")
+
+
 if __name__ == "__main__":  # pragma: no cover
     sys.exit(main())

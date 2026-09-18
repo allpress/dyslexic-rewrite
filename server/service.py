@@ -217,3 +217,24 @@ def compute_phonetic_map(segments: list[dict], profile: ReaderProfile, mode: str
         }
         for e in entries
     ]
+
+
+# ---------------------------------------------------------------------------------------
+# "Which kind of reader am I?" battery -- see dyslexic_rewrite.assess for the scoring itself.
+# ---------------------------------------------------------------------------------------
+from dyslexic_rewrite.assess import BatteryScores, profile_from_scores, score_battery  # noqa: E402
+
+
+def score_battery_raw(raw: dict[str, Any]) -> BatteryScores:
+    """Thin re-export so `server/app.py` only ever imports from `service`, not the package."""
+    return score_battery(raw)
+
+
+def apply_battery(user_id: int, base: str, raw: dict[str, Any]) -> ReaderProfile:
+    """Fold a finished battery run into the reader's stored profile, keeping what was already
+    learned about them (trigger words, vocabulary, writing-style targets)."""
+    scores = score_battery(raw)
+    existing, style = get_profile(user_id, base)
+    updated = profile_from_scores(scores, existing)
+    save_profile(user_id, updated, style)
+    return updated

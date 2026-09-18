@@ -153,3 +153,71 @@ gains `phonetic_map` (the mode that was active for the reader at the moment they
 
 Migration: `server/migrations/003_phonetic_map.sql` adds `users.phonetic_map` (`TEXT NOT NULL
 DEFAULT 'on_demand'`) and `test_items.phonetic_map` / `test_items.read_aloud`.
+
+---
+
+# "Which kind of reader am I?" battery (v0.4)
+
+A ~10-minute, keyboard/mouse-only screening battery (docs/RESEARCH.md, section 3) that gives a
+reader a plain-language profile across five axes, drawn as a radar chart -- never a label, never a
+diagnosis. No AI anywhere: every stimulus is static content from `server/battery_items.py`, and
+every score comes from deterministic arithmetic in `dyslexic_rewrite.assess`.
+
+Axes (`phonological`, `orthographic`, `rate`, `vas`, `attention`) each get a `support` (0-100,
+higher = more support would help) and a `confidence` (`"low"` when the task behind that axis was
+skipped). `comfort` (visual comfort) is scored the same way but shown as a separate note, never as
+an axis or folded into the profile (RESEARCH.md section 1.7). The project's own hypothesis --
+whether a reused spelling/heteronym costs extra reading time -- is reported separately as
+`heteronym: {slowdown_ms, slowdown_ratio, reliable, pairs_scored}`.
+
+**Every anchor these scores are built from is a documented first cut, not a validated instrument**
+-- see the module docstring in `src/dyslexic_rewrite/assess.py`. Every raw per-task result is
+stored (`battery_runs.raw`) specifically so the anchors can be re-scored later against real
+outcomes (RESEARCH.md section 3.1), without losing any attempt.
+
+Tasks A-F and H are implemented; **test G (RAN, read aloud into the existing recorder) is a TODO**
+for a later pass -- it needs the offline audio pipeline this battery deliberately avoids depending
+on. Test I (the A/B fluency test) already exists as the reading-tests flow above.
+
+| Method | Path | Body | Auth | Returns |
+| --- | --- | --- | --- | --- |
+| GET | `/api/battery/items` | -- | none | `BatteryItems` -- all stimuli, randomised per call |
+| POST | `/api/battery/score` | `{raw: BatteryRaw}` | none | `BatteryResult` -- scores a result set without saving it (how an anonymous reader sees their radar) |
+| POST | `/api/battery/runs` | -- | signed in | `BatteryRun` (started, empty `raw`) |
+| GET | `/api/battery/runs/{id}` | -- | signed in, own run | `BatteryRun` |
+| PATCH | `/api/battery/runs/{id}` | `{<task>: <task's raw result>}` -- any subset of the `BatteryRaw` keys | signed in, own run | `BatteryRun` (merged) |
+| POST | `/api/battery/runs/{id}/finish` | -- | signed in, own run | `BatteryRun` with `scores` filled in and `finished_at` set |
+| POST | `/api/battery/runs/{id}/apply` | -- | signed in, own run, already finished | `{profile: ProfileSummary}` -- merges `profile_from_scores` into the reader's stored profile, keeping their trigger words, vocabulary and style targets |
+| GET | `/api/battery/latest` | -- | signed in | `{run: BatteryRun \| null}` -- the reader's most recently *finished* run |
+
+An anonymous reader can call every route above except the four that need a saved run
+(`POST /api/battery/runs` and the three under it) -- they take the whole battery client-side and
+score it with `POST /api/battery/score`, but cannot save or apply a result until they sign in. The
+web app runs the same stepper either way and only asks for sign-in at the "use these settings"
+step.
+
+`BatteryItems` = `{checklist: {scale: [string x4], items: [{id, axis, prompt}], comfort_items:
+[{id, prompt}]}, spelling: {speech_rate, items: [{id, word, kind: "regular"|"irregular"|"nonword"}]},
+orthographic_choice: [{id, left, right, correct: "left"|"right"}], pseudohomophone: [{id, left,
+right, correct: "left"|"right"}], vas: [{id, letters: [string x5], practice: bool}], digit_span:
+[{id, length, digits: [int]}], heteronym: [{id, pair_id, condition: "target"|"control", words:
+[string], critical_index, question: {prompt, answer: bool} | null}]}`
+
+`BatteryRaw` (every key optional -- a reader can skip any task) = `{checklist: {answers: {item_id:
+1..4}, comfort: {item_id: 1..4}}, spelling: {trials: [{id, word, kind, response}]},
+orthographic_choice: {trials: [{id, correct, rt_ms}]}, pseudohomophone: {trials: [{id, correct,
+rt_ms}]}, vas: {trials: [{id, correct_letters, practice}]}, digit_span: {span: int}, heteronym:
+{trials: [{id, pair_id, condition, critical_index, word_rts: [number]}]}}`. `word_rts` is one
+reading time (ms) per word revealed in that sentence's moving window, in order.
+
+`BatteryResult` = `{axes: [{id, label, support, confidence: "low"|"normal", detail}], comfort:
+{support, confidence, detail}, heteronym: {slowdown_ms, slowdown_ratio, reliable, pairs_scored}}`
+
+`BatteryRun` = `{id, started_at, finished_at: string | null, raw: BatteryRaw, scores: BatteryResult
+| null}`
+
+Privacy: unlike a writing sample or free-form text, a battery run's raw data is fixed, single-word
+or numeric responses to the project's own stimuli (item ids, one typed word per spelling item,
+correctness, timings, Likert answers), kept on purpose so the scoring anchors in
+`dyslexic_rewrite.assess` can be re-checked against real outcomes later (RESEARCH.md section 3.1).
+`DELETE /api/me` removes every `battery_runs` row for that user, like everything else.

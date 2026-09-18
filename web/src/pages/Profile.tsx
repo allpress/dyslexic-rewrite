@@ -1,11 +1,13 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   ApiError,
   deleteMe,
+  getLatestBatteryRun,
   patchMe,
   postTriggers,
   type BaseProfile,
+  type BatteryRun,
   type PhoneticMapMode,
 } from '../api';
 import PhoneticModeSelect from '../components/PhoneticModeSelect';
@@ -25,6 +27,21 @@ export default function Profile() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
+  const [latestBattery, setLatestBattery] = useState<BatteryRun | null | undefined>(undefined);
+
+  useEffect(() => {
+    let cancelled = false;
+    getLatestBatteryRun()
+      .then((res) => {
+        if (!cancelled) setLatestBattery(res.run);
+      })
+      .catch(() => {
+        if (!cancelled) setLatestBattery(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   if (!user) return null;
 
@@ -112,6 +129,35 @@ export default function Profile() {
             </button>
           ))}
         </div>
+      </section>
+
+      <section className="stack" aria-labelledby="battery-heading">
+        <h2 id="battery-heading">Which kind of reader am I?</h2>
+        {latestBattery?.scores ? (
+          <div className="card stack">
+            <dl className="facts">
+              {latestBattery.scores.axes.map((axis) => (
+                <div key={axis.id}>
+                  <dt>{axis.label}</dt>
+                  <dd>{Math.round(axis.support)} / 100</dd>
+                </div>
+              ))}
+            </dl>
+            <Link className="btn" to="/assess">
+              Take it again
+            </Link>
+          </div>
+        ) : (
+          <div className="stack">
+            <p className="muted">
+              You have not taken the reading battery yet — a short set of quick tasks that builds a
+              simple chart of your reading, across five plain-language axes.
+            </p>
+            <Link className="btn" to="/assess">
+              Take the battery
+            </Link>
+          </div>
+        )}
       </section>
 
       <section className="stack" aria-labelledby="phon-heading">
