@@ -57,22 +57,43 @@ export function axisSentence(axis: RadarAxisDatum): string {
   return axis.confidence === 'low' ? `${base} (We do not have much to go on here yet.)` : base;
 }
 
-export default function Radar({ axes, size = 280 }: RadarProps) {
-  const cx = size / 2;
-  const cy = size / 2;
-  const radius = size / 2 - 56;
+/** Split a label into at most two lines so it never runs off the edge of the chart. */
+export function wrapLabel(label: string, max = 16): string[] {
+  const words = label.split(' ');
+  const lines: string[] = [];
+  let cur = '';
+  for (const w of words) {
+    if (cur && (cur + ' ' + w).length > max) {
+      lines.push(cur);
+      cur = w;
+    } else {
+      cur = cur ? cur + ' ' + w : w;
+    }
+  }
+  if (cur) lines.push(cur);
+  // Never drop words: a long label gets two longer lines instead of three short ones.
+  if (lines.length > 2) return wrapLabel(label, Math.ceil(label.length / 2) + 3);
+  return lines;
+}
+
+export default function Radar({ axes, size = 300 }: RadarProps) {
+  // Wider than tall so the side labels have room; the pentagon sits in the middle.
+  const width = size + 240;
+  const height = size + 60;
+  const cx = width / 2;
+  const cy = height / 2 + 6;
+  const radius = size / 2 - 20;
   const total = axes.length;
-  const labelRadius = radius + 34;
+  const labelRadius = radius + 18;
 
   return (
     <figure className="radar" style={{ margin: 0 }}>
       <svg
-        viewBox={`0 0 ${size} ${size}`}
+        viewBox={`0 0 ${width} ${height}`}
         width="100%"
-        height={size}
         role="img"
         aria-hidden="true"
-        style={{ maxWidth: size, display: 'block', margin: '0 auto' }}
+        style={{ maxWidth: width, display: 'block', margin: '0 auto' }}
       >
         {RINGS.map((r) => (
           <polygon
@@ -118,12 +139,23 @@ export default function Radar({ axes, size = 280 }: RadarProps) {
         })}
         {axes.map((axis, i) => {
           const a = angleFor(i, total);
-          const x = cx + labelRadius * Math.cos(a);
-          const y = cy + labelRadius * Math.sin(a);
-          const anchor = Math.cos(a) > 0.3 ? 'start' : Math.cos(a) < -0.3 ? 'end' : 'middle';
+          const cos = Math.cos(a);
+          const sin = Math.sin(a);
+          const x = cx + labelRadius * cos;
+          const anchor = cos > 0.3 ? 'start' : cos < -0.3 ? 'end' : 'middle';
+          const lines = wrapLabel(axis.label);
+          // Above the chart: stack lines upward; below or beside: stack downward.
+          const y = cy + labelRadius * sin + (sin < -0.3 ? -(lines.length - 1) * 15 : sin > 0.3 ? 14 : -4);
           return (
             <text key={axis.id} x={x} y={y} textAnchor={anchor} className="radar__label">
-              {axis.label}
+              {lines.map((line, li) => (
+                <tspan key={li} x={x} dy={li === 0 ? 0 : 15}>
+                  {line}
+                </tspan>
+              ))}
+              <tspan x={x} dy={15} className="radar__value">
+                {Math.round(axis.support)}
+              </tspan>
             </text>
           );
         })}

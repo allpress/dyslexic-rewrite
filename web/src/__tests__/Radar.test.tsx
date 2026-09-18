@@ -14,7 +14,12 @@ describe('Radar', () => {
   it('renders all five axis labels', () => {
     render(<Radar axes={AXES} />);
     for (const axis of AXES) {
-      expect(screen.getAllByText(axis.label).length).toBeGreaterThan(0);
+      // The SVG label may be wrapped over two <tspan>s; the accessible list carries it whole.
+      const svgLabels = [...document.querySelectorAll('svg text')].map((t) =>
+        [...t.querySelectorAll('tspan')].slice(0, -1).map((ts) => ts.textContent).join(' '),
+      );
+      expect(svgLabels).toContain(axis.label);
+      expect(screen.getAllByText((_, el) => el?.tagName === 'LI' && (el.textContent ?? '').startsWith(axis.label)).length).toBeGreaterThan(0);
     }
   });
 
