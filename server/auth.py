@@ -23,6 +23,8 @@ SECRET = os.environ.get("SESSION_SECRET") or ("dev-secret-" + hashlib.sha256(b"d
 RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
 FROM_EMAIL = os.environ.get("LOGIN_FROM_EMAIL", "login@unwindwords.com")
 APP_NAME = os.environ.get("APP_NAME", "Unwind Words")
+# While the sending domain is still being verified, showing the code on screen keeps the site usable.
+DEV_CODE_FALLBACK = os.environ.get("DEV_CODE_FALLBACK", "0") == "1"
 CODE_TTL = timedelta(minutes=10)
 SESSION_MAX_AGE = 60 * 60 * 24 * 90  # 90 days
 COOKIE = "session"
@@ -54,7 +56,13 @@ def request_code(email: str) -> str | None:
         c.commit()
     if not RESEND_API_KEY:
         return code
-    _send_email(email, code)
+    try:
+        _send_email(email, code)
+    except Exception as e:  # provider down, domain not verified yet, bad key ...
+        print(f"[auth] email send failed: {e}")
+        if DEV_CODE_FALLBACK:
+            return code
+        raise ValueError("We couldn't send the email just now. Please try again in a minute.") from e
     return None
 
 
