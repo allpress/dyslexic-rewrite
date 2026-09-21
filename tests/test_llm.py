@@ -275,6 +275,7 @@ def test_server_llm_cache_key_changes_with_profile(monkeypatch):
     """server/cache.py's key must depend on the profile, not just the paragraph."""
     import sys
 
+    pytest.importorskip("psycopg")  # server/ needs the API extras; the package-only CI job skips this
     sys.path.insert(0, ".")
     from server import cache as server_cache
 
