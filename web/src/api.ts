@@ -752,3 +752,39 @@ export const postNewsletter = (body: { email: string; source?: string }) =>
 export function trackPageView(path: string): void {
   post<{ ok: true }>('/track', { path }).catch(() => {});
 }
+
+/* ------------------------------------------------------------ feedback (v0.6) */
+// See server/API.md, "Feedback (v0.6)". The floating widget, the inline post-test/post-
+// conversion prompt, and Profile's "Your feedback" list all go through here.
+
+/** Bumped by hand alongside meaningful releases; sent as feedback context so reports can be
+ * told apart across versions. Matches web/package.json's own version. */
+export const APP_VERSION = '0.1.0';
+
+export type FeedbackKind = 'bug' | 'idea' | 'praise' | 'question';
+export type FeedbackStatus = 'new' | 'triaged' | 'planned' | 'done' | 'wontfix';
+
+export interface FeedbackSubmitBody {
+  kind: FeedbackKind;
+  message: string;
+  rating?: number;
+  page?: string;
+  email?: string;
+  context?: Record<string, unknown>;
+}
+
+/** POST /api/feedback/submit — anonymous allowed, rate-limited server-side to 10/hour/IP. */
+export const submitFeedback = (body: FeedbackSubmitBody) => post<{ id: string }>('/feedback/submit', body);
+
+export interface MyFeedbackItem {
+  id: string;
+  kind: FeedbackKind | 'tripped';
+  message: string;
+  rating: number | null;
+  page: string | null;
+  status: FeedbackStatus;
+  created_at: string;
+}
+
+/** GET /api/feedback/mine — the signed-in reader's own submissions, newest first. */
+export const getMyFeedback = () => request<MyFeedbackItem[]>('/feedback/mine');

@@ -4,11 +4,13 @@ import {
   ApiError,
   deleteMe,
   getLatestBatteryRun,
+  getMyFeedback,
   openPortal,
   patchMe,
   postTriggers,
   type BaseProfile,
   type BatteryRun,
+  type MyFeedbackItem,
   type PhoneticMapMode,
 } from '../api';
 import PhoneticModeSelect from '../components/PhoneticModeSelect';
@@ -21,6 +23,14 @@ const PROFILE_LABELS: Record<BaseProfile, string> = {
   attention: 'Long sentences lose me halfway through',
 };
 
+const FEEDBACK_STATUS_LABELS: Record<MyFeedbackItem['status'], string> = {
+  new: 'New',
+  triaged: 'Seen',
+  planned: 'Planned',
+  done: 'Done',
+  wontfix: "Won't fix",
+};
+
 export default function Profile() {
   const navigate = useNavigate();
   const { user, profile, setMe, setProfile, refresh } = useMe();
@@ -29,6 +39,7 @@ export default function Profile() {
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [latestBattery, setLatestBattery] = useState<BatteryRun | null | undefined>(undefined);
+  const [myFeedback, setMyFeedback] = useState<MyFeedbackItem[] | null>(null);
   const [portalBusy, setPortalBusy] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const [justUpgraded, setJustUpgraded] = useState(false);
@@ -52,6 +63,20 @@ export default function Profile() {
       })
       .catch(() => {
         if (!cancelled) setLatestBattery(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    getMyFeedback()
+      .then((items) => {
+        if (!cancelled) setMyFeedback(items);
+      })
+      .catch(() => {
+        if (!cancelled) setMyFeedback([]);
       });
     return () => {
       cancelled = true;
@@ -311,6 +336,36 @@ export default function Profile() {
             We have not measured your writing yet. Take a reading test, or paste a writing sample
             during setup.
           </p>
+        )}
+      </section>
+
+      <section className="stack" aria-labelledby="feedback-heading">
+        <h2 id="feedback-heading">Your feedback</h2>
+        {myFeedback === null ? (
+          <p className="muted">Loading…</p>
+        ) : myFeedback.length === 0 ? (
+          <p className="muted">
+            Nothing yet — the Feedback button in the corner of every page is always open.
+          </p>
+        ) : (
+          <ul className="feedback-mine-list">
+            {myFeedback.map((item) => (
+              <li className="card" key={item.id}>
+                <p className="feedback-mine__head" style={{ margin: 0 }}>
+                  <span className="feedback-mine__kind">{item.kind}</span>
+                  <span className={`feedback-mine__status feedback-mine__status--${item.status}`}>
+                    {FEEDBACK_STATUS_LABELS[item.status]}
+                  </span>
+                </p>
+                <p style={{ margin: '8px 0 0' }}>{item.message}</p>
+                <p className="muted" style={{ margin: '6px 0 0' }}>
+                  {new Date(item.created_at).toLocaleDateString()}
+                  {item.page ? ` · ${item.page}` : ''}
+                  {item.rating ? ` · ${item.rating}/5` : ''}
+                </p>
+              </li>
+            ))}
+          </ul>
         )}
       </section>
 

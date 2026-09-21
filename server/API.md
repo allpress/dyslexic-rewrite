@@ -510,3 +510,81 @@ match it -- the route is invisible by default, not just unauthorized.
 table, added by the library migration) are `null` when that column/table doesn't exist yet --
 guarded by a try/rollback per query, so this endpoint works whether or not those migrations have
 landed.
+
+# Feedback (v0.6)
+
+A lightweight feedback inbox: a floating widget on every page, an inline post-test/post-conversion
+prompt, and the existing tripped-word taps from the read-anything view, all landing in one table
+so a Claude skill can roll them up weekly into work. Implementation: `server/feedback.py`
+(registered as `feedback_module` in `server/app.py` to avoid shadowing the existing `feedback`
+route function), `server/migrations/010_feedback.sql`.
+
+`Feedback` = `{id, user_id: string|null, email: string|null, kind: "bug"|"idea"|"praise"|
+"question"|"tripped", message, rating: 1..5|null, page: string|null, context: object, status:
+"new"|"triaged"|"planned"|"done"|"wontfix", tags: [string], admin_note: string|null, created_at,
+updated_at}`
+
+`context` is a small, free-form grab-bag of whatever the web app could gather at the moment of
+submission -- profile name, plan, phonetic-map mode, book id, passage/test id, user agent,
+viewport, app version -- capped at 4,000 characters of JSON. Never anything sensitive; nothing here
+is a substitute for the privacy rules elsewhere in this document.
+
+## Submit
+
+Anonymous submissions are allowed. Rate-limited in-process to 10 requests per hour per client IP
+(same in-process-only caveat as the newsletter's limiter above).
+
+| Method | Path | Body | Auth | Returns |
+| --- | --- | --- | --- | --- |
+| POST | `/api/feedback/submit` | `{kind: "bug"\|"idea"\|"praise"\|"question", message (1-4000 chars), rating?: 1..5, page?, email?, context?: object}` | none | `{id}` (201; 400 bad email, 429 rate-limited) |
+| GET | `/api/feedback/mine` | -- | signed in | `[{id, kind, message, rating, page, status, created_at}]` -- the caller's own submissions, newest first |
+
+When the caller is signed in, `user_id` is attached automatically and any `email` in the body is
+ignored (their account email is already on file); `email` is only stored for a signed-out
+submitter who chose to give one. If `RESEND_API_KEY` and `FEEDBACK_NOTIFY_EMAIL` are both set, a
+one-line notification email is sent through `auth.send_email` for every submission (best-effort;
+never fails the submit).
+
+`POST /api/feedback` (the existing tripped-word route from "Read anything" above) is unchanged,
+but now also files a `kind: "tripped"` row here (message summarising the words, `context: {tripped,
+safe}`) whenever `tripped` or `safe` is non-empty, so those reports show up in the weekly digest
+too.
+
+## Admin
+
+All admin routes below require `?key=` to match `ADMIN_KEY`, exactly like `/api/admin/stats`
+above -- 404 outright when `ADMIN_KEY` isn't set, or when `key` doesn't match.
+
+| Method | Path | Body | Returns |
+| --- | --- | --- | --- |
+| GET | `/api/admin/feedback?key=&since=&status=&kind=&format=json\|md` | -- | `format=json` (default): `[Feedback]`, newest first. `format=md`: a `text/markdown` digest of the same rows, grouped by kind, newest first within each group -- this is what the weekly Claude skill reads. |
+| PATCH | `/api/admin/feedback/{id}?key=` | `{status?, tags?, admin_note?}` | `Feedback` (404 for an unknown id) |
+| GET | `/api/admin/feedback/summary?key=` | -- | `{last_7d, last_30d, top_pages: [{page, count}], generated_at}` -- each window is `{count, by_kind: {kind: n}, by_status: {status: n}, avg_rating: number\|null}` |
+| GET | `/api/admin/export?key=` | -- | the weekly "pulse" bundle, see below |
+
+`since` must be an ISO-8601 date/time (400 if it doesn't parse); `status`/`kind` filter to an exact
+match. The markdown digest lists, per item: id, date, `plan` (read from `context.plan`, "unknown"
+if absent), page, message, rating (if any), and a one-line context summary (every `context` key
+except `user_agent`).
+
+`GET /api/admin/export` returns `{feedback: [Feedback] (last 90 days), stats: <same shape as
+GET /api/admin/stats>, battery: {runs: int, mean_support_by_axis: {axis_id: number}}, ab_test:
+{original: {mean_wpm: number|null, n: int}, rewritten: {...}}, generated_at}` -- no per-user data
+anywhere in it. `battery` averages every finished battery run's per-axis `support` score
+(`battery_runs.scores.axes`); `ab_test` averages `test_items.wpm` by `condition` across every
+recorded reading-test item, site-wide. This is the single bundle the weekly rollup skill starts
+from.
+
+## Config (env)
+
+| Variable | Purpose |
+| --- | --- |
+| `FEEDBACK_NOTIFY_EMAIL` | If set alongside `RESEND_API_KEY`, every `POST /api/feedback/submit` sends a one-line notification here. Unset = no notification, submissions still succeed. |
+
+## Migration
+
+`server/migrations/010_feedback.sql` adds `feedback (id, user_id, email, kind, message, rating,
+page, context, status, tags, admin_note, created_at, updated_at)` with an index on
+`(status, created_at)`. `user_id` is `ON DELETE SET NULL` (not `CASCADE`, unlike most other
+tables): deleting an account detaches its feedback from who sent it but keeps the feedback itself,
+since that is exactly the record the weekly rollup needs.
