@@ -29,3 +29,7 @@ extension/web-ext-artifacts/
 # locally stored voice recordings (AUDIO_DIR default)
 /data/
 !server/data/
+
+# Claude Code local state (skills are committed)
+.claude/*
+!.claude/skills/
