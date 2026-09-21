@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 from dyslexic_rewrite import __version__
 from dyslexic_rewrite.profile import BUILTIN_PROFILES
 
-from . import auth, battery_items, cache, db, passages, prompts, samples, service, storage
+from . import auth, battery_items, cache, db, library, passages, prompts, samples, service, storage
 
 app = FastAPI(title="Unwind Words", version=__version__, docs_url=None, redoc_url=None)
 SECURE_COOKIES = os.environ.get("SECURE_COOKIES", "1") == "1"
@@ -49,6 +49,11 @@ async def _lifespan(_: FastAPI):
     if os.environ.get("WARM_SAMPLES", "1") == "1":
         warm = threading.Thread(target=_warm_sample_cache, daemon=True)
         warm.start()
+    # "Your library" background worker: a book left queued/processing by a restart re-queues.
+    # Tests set LIBRARY_WORKER=0 and drive it deterministically with library.run_pending() instead.
+    if os.environ.get("LIBRARY_WORKER", "1") == "1":
+        library.start_worker()
+    library.requeue_incomplete()
     yield
     # Let the warm-up finish before the pool goes away: tearing the process down while spaCy
     # is mid-parse on another thread makes BLIS abort at exit (seen in CI).
@@ -83,7 +88,7 @@ def _user_json(u: dict) -> dict:
         has = c.execute("SELECT 1 FROM profiles WHERE user_id = %s", (u["id"],)).fetchone() is not None
     return {"id": u["id"], "email": u["email"], "name": u["name"], "base_profile": u["base_profile"],
             "onboarded": u["onboarded"], "has_personal_profile": has, "phonetic_map": u["phonetic_map"],
-            "created_at": u["created_at"].isoformat()}
+            "kindle_email": u["kindle_email"], "created_at": u["created_at"].isoformat()}
 
 
 def current_user(request: Request) -> dict:
@@ -116,6 +121,7 @@ class MePatch(BaseModel):
     base_profile: str | None = None
     onboarded: bool | None = None
     phonetic_map: str | None = None
+    kindle_email: str | None = Field(default=None, max_length=254)
 
 
 class TextIn(BaseModel):
@@ -193,12 +199,16 @@ def patch_me(body: MePatch, u: dict = Depends(current_user)):
         raise HTTPException(400, f"base_profile must be one of {list(BUILTIN_PROFILES)}")
     if body.phonetic_map is not None and body.phonetic_map not in service.PHONETIC_MAP_MODES:
         raise HTTPException(400, f"phonetic_map must be one of {list(service.PHONETIC_MAP_MODES)}")
+    kindle_email = None
+    if body.kindle_email is not None:
+        kindle_email = auth.normalise_email(body.kindle_email) if body.kindle_email.strip() else ""
     with db.conn() as c:
         c.execute(
             "UPDATE users SET name = COALESCE(%s, name), base_profile = COALESCE(%s, base_profile), "
-            "onboarded = COALESCE(%s, onboarded), phonetic_map = COALESCE(%s, phonetic_map) WHERE id = %s",
+            "onboarded = COALESCE(%s, onboarded), phonetic_map = COALESCE(%s, phonetic_map), "
+            "kindle_email = CASE WHEN %s THEN NULLIF(%s, '') ELSE kindle_email END WHERE id = %s",
             (body.name.strip() if body.name else None, body.base_profile, body.onboarded,
-             body.phonetic_map, u["id"]),
+             body.phonetic_map, body.kindle_email is not None, kindle_email, u["id"]),
         )
         c.commit()
     if body.base_profile and body.base_profile != u["base_profile"]:
@@ -224,8 +234,9 @@ def me_triggers(body: TriggersIn, u: dict = Depends(current_user)):
 
 @app.delete("/api/me")
 def delete_me(response: Response, u: dict = Depends(current_user)):
+    library.delete_user_books(u["id"])  # files first: the row (and its keys) is about to go
     with db.conn() as c:
-        c.execute("DELETE FROM users WHERE id = %s", (u["id"],))  # cascades to profile, tests, items, recordings
+        c.execute("DELETE FROM users WHERE id = %s", (u["id"],))  # cascades to profile, tests, items, recordings, books
         c.execute("DELETE FROM login_codes WHERE email = %s", (u["email"],))
         c.commit()
     storage.delete_user(u["id"])
@@ -660,6 +671,110 @@ def latest_battery_run(u: dict = Depends(current_user)):
             "ORDER BY finished_at DESC LIMIT 1", (u["id"],),
         ).fetchone()
     return {"run": _battery_run_json(r) if r else None}
+
+
+# ---------------------------------------------------------------------------------------
+# "Your library" (v0.5): upload a book, get it back rewritten, read it on the site or a Kindle.
+# See server/library.py for storage, the background worker, and rewriting; server/API.md for
+# the contract. All routes below require sign-in.
+# ---------------------------------------------------------------------------------------
+def _own_book(book_id: int, user_id: int) -> dict:
+    with db.conn() as c:
+        b = c.execute("SELECT * FROM books WHERE id = %s AND user_id = %s", (book_id, user_id)).fetchone()
+    if not b:
+        raise HTTPException(404, "No such book.")
+    return b
+
+
+@app.post("/api/books", status_code=201)
+def upload_book(
+    file: UploadFile = File(...),
+    title: str | None = Form(default=None),
+    author: str | None = Form(default=None),
+    engine: str = Form(default="rules"),
+    u: dict = Depends(current_user),
+):
+    data = file.file.read()
+    return library.create_book(u, file.filename or "book", data, title=title, author=author, engine=engine)
+
+
+@app.get("/api/books")
+def list_books(u: dict = Depends(current_user)):
+    with db.conn() as c:
+        rows = c.execute("SELECT * FROM books WHERE user_id = %s ORDER BY created_at DESC", (u["id"],)).fetchall()
+    return [library.book_json(r) for r in rows]
+
+
+@app.get("/api/books/{book_id}")
+def get_book(book_id: int, u: dict = Depends(current_user)):
+    return library.book_json(_own_book(book_id, u["id"]))
+
+
+@app.get("/api/books/{book_id}/read")
+def read_book_chapter(book_id: int, chapter: int = 0, u: dict = Depends(current_user)):
+    book = _own_book(book_id, u["id"])
+    if book["status"] != "ready":
+        raise HTTPException(409, "This book isn't ready yet.")
+    from dyslexic_rewrite.io import read_chapters
+    chapters = read_chapters(library.resolve_key(book["source_key"]))
+    if not (0 <= chapter < len(chapters)):
+        raise HTTPException(404, "No such chapter.")
+    ch = chapters[chapter]
+    profile, _ = service.get_profile(u["id"], u["base_profile"])
+    segs, stats, phonetic_map, cached = library.render_chapter(ch["text"], profile, book["engine"], u["phonetic_map"])
+    with db.conn() as c:
+        c.execute("UPDATE books SET last_opened_at = now() WHERE id = %s", (book_id,))
+        c.commit()
+    return {"segments": segs, "stats": stats, "phonetic_map": phonetic_map, "cached": cached,
+            "chapter": chapter, "chapters": len(chapters), "title": ch["title"]}
+
+
+@app.get("/api/books/{book_id}/download")
+def download_book(book_id: int, u: dict = Depends(current_user)):
+    book = _own_book(book_id, u["id"])
+    if book["status"] != "ready" or not book["output_key"]:
+        raise HTTPException(409, "This book isn't ready yet.")
+    path = library.resolve_key(book["output_key"])
+    filename = f"{library.safe_filename(book['title'])}.epub"
+    return FileResponse(path, media_type="application/epub+zip",
+                        headers={"Content-Disposition": f'attachment; filename="{filename}"'})
+
+
+@app.post("/api/books/{book_id}/kindle")
+def kindle_book(book_id: int, u: dict = Depends(current_user)):
+    book = _own_book(book_id, u["id"])
+    library.send_to_kindle(book, u)
+    with db.conn() as c:
+        c.execute("UPDATE books SET kindle_sent_at = now() WHERE id = %s", (book_id,))
+        c.commit()
+    return {"ok": True}
+
+
+@app.post("/api/books/{book_id}/rerun")
+def rerun_book(book_id: int, u: dict = Depends(current_user)):
+    library.billing.require_pro(u)
+    book = _own_book(book_id, u["id"])
+    if book["status"] == "processing":
+        raise HTTPException(409, "This book is already being processed.")
+    with db.conn() as c:
+        c.execute("UPDATE books SET status = 'queued', progress = 0, error = NULL WHERE id = %s", (book_id,))
+        c.commit()
+    library.enqueue(book_id)
+    return library.book_json(_own_book(book_id, u["id"]))
+
+
+@app.delete("/api/books/{book_id}")
+def delete_book(book_id: int, u: dict = Depends(current_user)):
+    with db.conn() as c:
+        row = c.execute(
+            "DELETE FROM books WHERE id = %s AND user_id = %s RETURNING source_key, output_key",
+            (book_id, u["id"]),
+        ).fetchone()
+        c.commit()
+    if not row:
+        raise HTTPException(404, "No such book.")
+    library.delete_files(row["source_key"], row["output_key"])
+    return {"ok": True}
 
 
 # ---------------------------------------------------------------------------------------

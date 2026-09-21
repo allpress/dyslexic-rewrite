@@ -1,9 +1,19 @@
-"""Read text from .txt / .md / .html / .epub files."""
+"""Read/write .txt / .md / .html / .epub files.
+
+`read_text` (above) flattens a whole document into one blob, for the CLI's single-shot
+`rewrite`/`analyze` commands. `read_chapters` and `write_epub` (below) work at the
+chapter level, for "Your library": upload a book, rewrite each chapter separately (so
+progress, caching and per-chapter fidelity checks all work the way they do for any other
+paragraph), and get a real EPUB back.
+"""
 
 from __future__ import annotations
 
+import html
 import re
+import uuid
 from pathlib import Path
+from typing import Any
 
 
 def read_text(path: str | Path) -> str:
@@ -106,3 +116,277 @@ def _read_epub(path: Path) -> str:
     for item in book.get_items_of_type(ebooklib.ITEM_DOCUMENT):
         chunks.append(_html_to_text(item.get_content().decode("utf-8", errors="replace")))
     return "\n\n".join(c for c in chunks if c.strip())
+
+
+# =========================================================================================
+# Chapters: read_chapters() / write_epub() -- "Your library" (upload a book, get it back
+# rewritten, read it on the site or on a Kindle).
+# =========================================================================================
+
+CHUNK_WORDS = 8_000
+
+_MD_HEADING_RE = re.compile(r"^#{1,6}\s+(.+?)\s*$", re.M)
+_CHAPTER_LINE_RE = re.compile(r"^\s*chapter\s+\S+.*$", re.I | re.M)
+
+
+def _clean_md_text(raw: str) -> str:
+    raw = re.sub(r"^#{1,6}\s*", "", raw, flags=re.M)
+    raw = re.sub(r"[*_`]{1,3}", "", raw)
+    return _normalise(raw)
+
+
+def _chunk_chapter(text: str, chunk_words: int = CHUNK_WORDS) -> list[dict[str, str]]:
+    """Split one big chapter into ~chunk_words-word pieces on paragraph boundaries."""
+    if len(text.split()) <= chunk_words:
+        return [{"title": "Chapter 1", "text": text}] if text.strip() else []
+    paras = [p for p in text.split("\n\n") if p.strip()]
+    chunks: list[str] = []
+    cur: list[str] = []
+    cur_words = 0
+    for p in paras:
+        pw = len(p.split())
+        if cur and cur_words + pw > chunk_words:
+            chunks.append("\n\n".join(cur))
+            cur, cur_words = [], 0
+        cur.append(p)
+        cur_words += pw
+    if cur:
+        chunks.append("\n\n".join(cur))
+    return [{"title": f"Chapter {i + 1}", "text": c} for i, c in enumerate(chunks)]
+
+
+def _split_text_chapters(raw: str, is_md: bool) -> list[dict[str, str]]:
+    raw = raw.replace("\r\n", "\n").replace("\r", "\n")
+
+    def _sections(matches: list[re.Match], titler) -> list[dict[str, str]]:
+        out = []
+        for i, m in enumerate(matches):
+            start = m.end()
+            end = matches[i + 1].start() if i + 1 < len(matches) else len(raw)
+            body = raw[start:end]
+            text = _clean_md_text(body) if is_md else _normalise(body)
+            if text.strip():
+                out.append({"title": titler(m), "text": text})
+        return out
+
+    if is_md:
+        md = list(_MD_HEADING_RE.finditer(raw))
+        if md:
+            sections = _sections(md, lambda m: m.group(1).strip())
+            if sections:
+                return sections
+
+    ch = list(_CHAPTER_LINE_RE.finditer(raw))
+    if ch:
+        sections = _sections(ch, lambda m: m.group(0).strip())
+        if sections:
+            return sections
+
+    whole = _clean_md_text(raw) if is_md else _normalise(raw)
+    return _chunk_chapter(whole)
+
+
+def _first_heading(raw_html: str) -> str | None:
+    try:
+        from bs4 import BeautifulSoup
+    except ImportError:  # pragma: no cover
+        return None
+    soup = BeautifulSoup(raw_html, "html.parser")
+    for tag in ("h1", "h2", "h3"):
+        el = soup.find(tag)
+        if el:
+            txt = el.get_text(" ", strip=True)
+            if txt:
+                return txt
+    return None
+
+
+def _read_epub_chapters(path: Path) -> list[dict[str, str]]:
+    try:
+        import ebooklib
+        from ebooklib import epub
+    except ImportError as e:  # pragma: no cover
+        raise SystemExit("EPUB input needs ebooklib: pip install 'dyslexic-rewrite[epub]'") from e
+    book = epub.read_epub(str(path))
+    chapters: list[dict[str, str]] = []
+    for idref, _linear in book.spine:
+        item = book.get_item_with_id(idref)
+        if item is None or item.get_type() != ebooklib.ITEM_DOCUMENT:
+            continue
+        raw_html = item.get_content().decode("utf-8", errors="replace")
+        text = _html_to_text(raw_html)
+        if not text.strip():
+            continue
+        title = _first_heading(raw_html) or f"Chapter {len(chapters) + 1}"
+        chapters.append({"title": title, "text": text})
+    if not chapters:
+        chapters = _chunk_chapter(_read_epub(path))
+    return chapters
+
+
+def read_chapters(path: str | Path) -> list[dict[str, str]]:
+    """Split a book into `[{"title": str, "text": str}, ...]`, one entry per chapter.
+
+    `.epub`: walks the spine in order, one chapter per spine document, titled from its
+    first `<h1>`/`<h2>`/`<h3>` (falling back to "Chapter N").
+
+    `.txt`/`.md`: splits on Markdown headings (`.md` only) or lines like "Chapter 3" /
+    "CHAPTER III"; if neither pattern is found, the whole file is one chapter, further cut
+    into ~8,000-word chunks (on paragraph boundaries) so a single huge chapter still
+    rewrites and renders in reasonable pieces.
+    """
+    path = Path(path)
+    suffix = path.suffix.lower()
+    if suffix == ".epub":
+        return _read_epub_chapters(path)
+    raw = path.read_text(encoding="utf-8", errors="replace")
+    return _split_text_chapters(raw, is_md=(suffix == ".md"))
+
+
+_EPUB_CSS = """
+body {{ font-family: "Atkinson Hyperlegible", "OpenDyslexic", serif; font-size: {font_size_px}px;
+  line-height: {line_height}; letter-spacing: {letter_spacing_em}em; word-spacing: {word_spacing_em}em;
+  margin: 0 auto; max-width: {max_line_chars}ch; padding: 1em; background: {background}; color: {text}; }}
+p {{ margin: 0 0 {paragraph_gap_em}em; }}
+h1, h2 {{ line-height: 1.3; margin: 1em 0 0.6em; }}
+ruby {{ ruby-position: over; }}
+rt {{ font-size: 0.6em; }}
+span.orig {{ border-bottom: 1px dotted currentColor; }}
+"""
+
+_FRONT_MATTER_TEMPLATE = (
+    "<h1>{title}</h1>"
+    "<p>Rewritten for easier reading by Unwind Words &mdash; every change is reversible; "
+    "the original text is unchanged.</p>"
+)
+
+
+def _paragraphs_of(result_or_paragraphs: Any) -> list:
+    """A RewriteResult's `.paragraphs`, or a bare list of Paragraph objects."""
+    return getattr(result_or_paragraphs, "paragraphs", result_or_paragraphs)
+
+
+def _chapter_body_html(paragraphs: list, profile) -> str:
+    """Body-inner XHTML for one chapter (ebooklib wraps this in <html><head>...<body>)."""
+    from .render import _phonetic_for_trigger
+
+    show_phonetic = getattr(profile, "phonetic_map", "off") != "off"
+    parts = []
+    for para in paragraphs:
+        tag = "h2" if getattr(para, "heading", False) else "p"
+        buf = []
+        for s in para.sentences:
+            for kind, val in s.segments:
+                if kind == "text":
+                    if val:
+                        buf.append(html.escape(val))
+                elif kind == "change":
+                    buf.append(
+                        f'<span class="orig" title="{html.escape(val.original, quote=True)}">'
+                        f"{html.escape(val.replacement)}</span>"
+                    )
+                elif kind == "note":
+                    word_html = html.escape(val.text)
+                    if show_phonetic:
+                        phon = _phonetic_for_trigger(val, profile)
+                        if phon:
+                            word_html = f"<ruby>{word_html}<rt>{html.escape(phon[0])}</rt></ruby>"
+                    buf.append(word_html)
+                # "break" segments are sentence boundaries the rewriter inserted; nothing to render.
+            buf.append(" ")
+        text = "".join(buf).strip()
+        if text:
+            parts.append(f"<{tag}>{text}</{tag}>")
+    return "\n".join(parts)
+
+
+def write_epub(
+    result_or_paragraphs: Any,
+    path: str | Path,
+    title: str,
+    author: str | None = None,
+    chapters: list[Any] | None = None,
+    profile: Any = None,
+) -> Path:
+    """Write a valid EPUB 3 file with `ebooklib`.
+
+    One-chapter book: pass a `RewriteResult` (or a bare list of `Paragraph`) as
+    `result_or_paragraphs`. Multi-chapter book: pass `chapters`, a list of either
+    `(chapter_title, RewriteResult)` tuples or `{"title": ..., "result": ...}` dicts;
+    `result_or_paragraphs` is then ignored (pass `None`). A chapter dict may instead carry
+    `{"title": ..., "html": "<p>...</p>"}` -- ready-made body-inner XHTML, used by the server
+    (`server/library.py`), which already has each chapter's rewrite as JSON segments rather
+    than `Paragraph` objects.
+
+    `profile` (a `ReaderProfile`) drives the reader-friendly CSS (font size, line height,
+    letter/word spacing, max line width) and whether flagged-but-kept words get an inline
+    `<ruby>` phonetic map (Kindle renders `<ruby>`/`<rt>`) -- included whenever
+    `profile.phonetic_map != "off"`. Changed words keep their original inline, cheaply, as
+    a `title` attribute (`<span class="orig" title="...">`). Defaults to `ReaderProfile()`
+    when omitted.
+
+    A short front-matter page is written before the first chapter, saying the rewrite is
+    reversible and the original text is untouched.
+    """
+    try:
+        from ebooklib import epub
+    except ImportError as e:  # pragma: no cover
+        raise SystemExit("EPUB output needs ebooklib: pip install 'dyslexic-rewrite[epub]'") from e
+    from .profile import ReaderProfile
+
+    profile = profile or ReaderProfile()
+
+    if chapters is None:
+        chapter_list = [{"title": title, "paragraphs": _paragraphs_of(result_or_paragraphs)}]
+    else:
+        chapter_list = []
+        for ch in chapters:
+            if isinstance(ch, dict):
+                ch_title = ch.get("title") or f"Chapter {len(chapter_list) + 1}"
+                if "html" in ch:
+                    chapter_list.append({"title": ch_title, "html": ch["html"]})
+                    continue
+                ch_paras = _paragraphs_of(ch.get("result", ch.get("paragraphs")))
+            else:
+                ch_title, ch_result = ch
+                ch_paras = _paragraphs_of(ch_result)
+            chapter_list.append({"title": ch_title, "paragraphs": ch_paras})
+
+    book = epub.EpubBook()
+    book.set_identifier(str(uuid.uuid4()))
+    book.set_title(title)
+    book.set_language(getattr(profile, "language", "en") or "en")
+    if author:
+        book.add_author(author)
+
+    css = epub.EpubItem(
+        uid="style_main", file_name="style/main.css", media_type="text/css",
+        content=_EPUB_CSS.format(**dict(profile.layout)).encode("utf-8"),
+    )
+    book.add_item(css)
+
+    front = epub.EpubHtml(title="About this edition", file_name="front.xhtml", lang=profile.language)
+    front.content = _FRONT_MATTER_TEMPLATE.format(title=html.escape(title))
+    front.add_item(css)
+    book.add_item(front)
+
+    spine_items: list = [front]
+    toc: list = [front]
+    for i, ch in enumerate(chapter_list):
+        page = epub.EpubHtml(title=ch["title"], file_name=f"chap_{i + 1:03d}.xhtml", lang=profile.language)
+        page.content = ch["html"] if "html" in ch else _chapter_body_html(ch["paragraphs"], profile)
+        page.add_item(css)
+        book.add_item(page)
+        spine_items.append(page)
+        toc.append(page)
+
+    book.toc = tuple(toc)
+    book.add_item(epub.EpubNcx())
+    nav = epub.EpubNav()
+    book.add_item(nav)
+    book.spine = [nav, *spine_items]
+
+    out_path = Path(path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    epub.write_epub(str(out_path), book)
+    return out_path

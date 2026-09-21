@@ -12,6 +12,8 @@ import ReadAnything from './pages/Read';
 import Record from './pages/Record';
 import Profile from './pages/Profile';
 import Assess from './pages/Assess';
+import Library from './pages/Library';
+import BookReader from './pages/BookReader';
 import NotFound from './pages/NotFound';
 
 export default function App() {
@@ -75,6 +77,22 @@ export default function App() {
           element={
             <RequireAuth>
               <Profile />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/library"
+          element={
+            <RequireAuth>
+              <Library />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/library/:id"
+          element={
+            <RequireAuth>
+              <BookReader />
             </RequireAuth>
           }
         />

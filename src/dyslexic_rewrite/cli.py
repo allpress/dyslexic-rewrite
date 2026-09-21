@@ -10,7 +10,7 @@ import click
 
 from . import __version__
 from .analyze import analyze
-from .io import read_text
+from .io import read_text, write_epub
 from .profile import BUILTIN_PROFILES, load_profile
 from .pronounce import respell
 from .render import write_outputs
@@ -85,8 +85,10 @@ main.add_command(analyze_cmd, name="analyze")
 @click.option("--simplify-vocab", is_flag=True, help="Also swap rare/long words for plain ones when a safe one is known")
 @click.option("--phonetic-map", "phonetic_map", type=click.Choice(_PHONETIC_MAP_CHOICES), default=None,
               help="Override the profile's phonetic map mode (off/on_demand/always) for this run")
+@click.option("--epub", "want_epub", is_flag=True,
+              help="Also write an EPUB (automatic when the input file is itself .epub)")
 @click.option("-v", "--verbose", is_flag=True)
-def rewrite(file, profile_name, out_dir, engine, formats, simplify_vocab, phonetic_map, verbose):
+def rewrite(file, profile_name, out_dir, engine, formats, simplify_vocab, phonetic_map, want_epub, verbose):
     """Rewrite a .txt/.md/.html/.epub file and write an HTML reader view next to plain text."""
     profile = load_profile(profile_name)
     if phonetic_map:
@@ -106,6 +108,9 @@ def rewrite(file, profile_name, out_dir, engine, formats, simplify_vocab, phonet
         click.echo(f"llm paragraphs {st['llm_paragraphs']}, fell back to rules {st['llm_fallbacks']}")
     for p in written:
         click.echo(f"wrote {p}")
+    if want_epub or Path(file).suffix.lower() == ".epub":
+        epub_path = write_epub(result, Path(out_dir) / f"{stem}.epub", title=Path(file).stem, profile=profile)
+        click.echo(f"wrote {epub_path}")
 
 
 # --------------------------------------------------------------------------------------

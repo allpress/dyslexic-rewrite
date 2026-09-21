@@ -1052,3 +1052,89 @@ input[type='file'] {
   border-bottom: 1px solid var(--line);
   padding-bottom: 8px;
 }
+
+/* ----------------------------------------------------------- library */
+
+.upload-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+  padding: 28px 20px;
+  border: 2px dashed var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.upload-drop--over {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.book-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 16px;
+}
+
+.book-card {
+  background: var(--surface);
+  border: 2px solid var(--line);
+  border-radius: var(--radius);
+  padding: 18px;
+  display: grid;
+  gap: 10px;
+}
+
+.book-card__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.book-card__head h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.book-status {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 2px solid var(--line);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.book-status--ready {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.book-status--failed {
+  border-color: var(--trip-line);
+  color: var(--trip-line);
+}
+
+.progress-bar {
+  height: 14px;
+  background: var(--surface-2);
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.progress-bar__fill {
+  height: 100%;
+  background: var(--accent);
+  min-width: 3px;
+  transition: width 300ms ease;
+}

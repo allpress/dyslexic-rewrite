@@ -18,6 +18,9 @@ export default function Nav() {
             <NavLink to="/read" className="nav__link">
               Read
             </NavLink>
+            <NavLink to="/library" className="nav__link">
+              Library
+            </NavLink>
             <NavLink to="/record" className="nav__link">
               Record
             </NavLink>

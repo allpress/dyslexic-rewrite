@@ -23,6 +23,8 @@ export interface User {
   onboarded: boolean;
   has_personal_profile: boolean;
   phonetic_map: PhoneticMapMode;
+  /** Where "Send to Kindle" (see Library, v0.5) emails a book's EPUB. Null until set. */
+  kindle_email: string | null;
   created_at: string;
 }
 
@@ -282,6 +284,7 @@ export const patchMe = (patch: {
   base_profile?: BaseProfile;
   onboarded?: boolean;
   phonetic_map?: PhoneticMapMode;
+  kindle_email?: string;
 }) => request<{ user: User }>('/me', { method: 'PATCH', body: JSON.stringify(patch) });
 
 export const postWritingSample = (text: string) =>
@@ -575,3 +578,110 @@ export const applyBatteryRun = (id: string) =>
   post<{ profile: ProfileSummary }>(`/battery/runs/${encodeURIComponent(id)}/apply`);
 
 export const getLatestBatteryRun = () => request<{ run: BatteryRun | null }>('/battery/latest');
+
+/* ------------------------------------------------------ "Your library" (v0.5) */
+// See server/API.md, "Library (v0.5)". Upload a book, get it back rewritten, read it on the
+// site or send it to a Kindle.
+
+export type BookStatus = 'queued' | 'processing' | 'ready' | 'failed';
+export type BookSourceKind = 'epub' | 'txt' | 'md';
+export type BookEngine = 'rules' | 'llm';
+
+export interface Book {
+  id: string;
+  title: string;
+  author: string | null;
+  source_name: string;
+  source_kind: BookSourceKind;
+  words: number;
+  /** Total chapter count once known (0 until the upload has been read). */
+  chapters: number;
+  status: BookStatus;
+  engine: BookEngine;
+  /** Chapters rewritten so far, out of `chapters` — poll while `status` is queued/processing. */
+  progress: number;
+  error: string | null;
+  created_at: string;
+  finished_at: string | null;
+  last_opened_at: string | null;
+  kindle_sent_at: string | null;
+}
+
+/** GET /api/books/{id}/read?chapter=n — same shape as RewriteResponse, plus the chapter itself. */
+export interface BookChapterResponse extends RewriteResponse {
+  chapter: number;
+  chapters: number;
+  title: string;
+}
+
+export const getBooks = () => request<Book[]>('/books');
+
+export const getBook = (id: string) => request<Book>(`/books/${encodeURIComponent(id)}`);
+
+export const getBookChapter = (id: string, chapter: number) =>
+  request<BookChapterResponse>(`/books/${encodeURIComponent(id)}/read?chapter=${encodeURIComponent(chapter)}`);
+
+export const rerunBook = (id: string) => post<Book>(`/books/${encodeURIComponent(id)}/rerun`);
+
+export const sendToKindle = (id: string) => post<{ ok: true }>(`/books/${encodeURIComponent(id)}/kindle`);
+
+export const deleteBook = (id: string) =>
+  request<{ ok: true }>(`/books/${encodeURIComponent(id)}`, { method: 'DELETE' });
+
+/** Own books only; the browser sends the session cookie along with the download navigation. */
+export function downloadBookUrl(id: string): string {
+  return `/api/books/${encodeURIComponent(id)}/download`;
+}
+
+export interface UploadBookBody {
+  file: File;
+  title?: string;
+  author?: string;
+  engine?: BookEngine;
+}
+
+/** POST /api/books as multipart form data, via XHR so we get real upload progress. */
+export function uploadBook(body: UploadBookBody, onProgress?: (fraction: number) => void): Promise<Book> {
+  return new Promise((resolve, reject) => {
+    const form = new FormData();
+    form.append('file', body.file, body.file.name);
+    if (body.title) form.append('title', body.title);
+    if (body.author) form.append('author', body.author);
+    if (body.engine) form.append('engine', body.engine);
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/books');
+    xhr.withCredentials = true;
+
+    if (onProgress) {
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) onProgress(e.loaded / e.total);
+      };
+    }
+
+    xhr.onload = () => {
+      let payload: unknown = null;
+      try {
+        payload = xhr.responseText ? JSON.parse(xhr.responseText) : null;
+      } catch {
+        payload = null;
+      }
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(payload as Book);
+        return;
+      }
+      const message =
+        (payload && typeof payload === 'object' && 'error' in payload
+          ? String((payload as { error: unknown }).error)
+          : '') || `Something went wrong (${xhr.status}).`;
+      if (xhr.status === 401 && onUnauthorized) onUnauthorized();
+      reject(new ApiError(xhr.status, message));
+    };
+
+    xhr.onerror = () => {
+      reject(new ApiError(0, 'The upload failed. Check your connection and try again.'));
+    };
+
+    xhr.send(form);
+  });
+}

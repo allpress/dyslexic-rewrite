@@ -14,6 +14,7 @@ const USER: User = {
   onboarded: false,
   has_personal_profile: false,
   phonetic_map: 'on_demand',
+  kindle_email: null,
   created_at: '2026-09-17T10:00:00Z',
 };
 
