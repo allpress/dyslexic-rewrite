@@ -66,6 +66,22 @@ def request_code(email: str) -> str | None:
     return None
 
 
+def send_email(to: str, subject: str, text: str, html: str, *, from_email: str | None = None) -> None:
+    """Send one transactional email through Resend. Raises on any non-2xx response.
+
+    Shared by the sign-in code email below and by the marketing newsletter (server/marketing.py),
+    so there is exactly one place that talks to the email provider.
+    """
+    r = httpx.post(
+        "https://api.resend.com/emails",
+        headers={"Authorization": f"Bearer {RESEND_API_KEY}"},
+        json={"from": f"{APP_NAME} <{from_email or FROM_EMAIL}>", "to": [to], "subject": subject,
+              "text": text, "html": html},
+        timeout=15,
+    )
+    r.raise_for_status()
+
+
 def _send_email(email: str, code: str) -> None:
     body = (
         f"Your {APP_NAME} sign-in code is:\n\n    {code}\n\n"
@@ -77,14 +93,7 @@ def _send_email(email: str, code: str) -> None:
         f"<p style='font-family:sans-serif;font-size:16px;line-height:1.8'>It works for 10 minutes. "
         f"If you didn't ask for it, ignore this email.</p>"
     )
-    r = httpx.post(
-        "https://api.resend.com/emails",
-        headers={"Authorization": f"Bearer {RESEND_API_KEY}"},
-        json={"from": f"{APP_NAME} <{FROM_EMAIL}>", "to": [email], "subject": f"{code} is your {APP_NAME} code",
-              "text": body, "html": html},
-        timeout=15,
-    )
-    r.raise_for_status()
+    send_email(email, f"{code} is your {APP_NAME} code", body, html)
 
 
 def verify_code(email: str, code: str) -> int:

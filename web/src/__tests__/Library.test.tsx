@@ -15,6 +15,7 @@ const USER: User = {
   has_personal_profile: false,
   phonetic_map: 'on_demand',
   kindle_email: null,
+  plan: { plan: 'free', pro: false, plan_until: null, cancel_at_period_end: false, manageable: false },
   created_at: '2026-09-17T10:00:00Z',
 };
 

@@ -439,3 +439,74 @@ source_key, output_key, progress, created_at, finished_at, last_opened_at, kindl
 Env vars: `BOOKS_DIR` (default `./data/books`), plus the LLM engine's existing
 `DYSREWRITE_LLM_BASE_URL`/`DYSREWRITE_LLM_API_KEY` (see `src/dyslexic_rewrite/rewrite/llm.py`) to
 allow Pro readers the `"llm"` engine.
+# Marketing (v0.5)
+
+The launch marketing surface: server-rendered SEO book pages (real HTML, not the SPA), a
+newsletter, a cookie-free page-view counter, and an admin stats endpoint. Implementation:
+`server/books.py` (pages) and `server/marketing.py` (newsletter/track/admin), registered in
+`server/app.py` *before* the SPA's catch-all route so neither the static mount nor the SPA
+fallback can shadow them.
+
+## Server-rendered book pages
+
+Plain HTML (not the React app) so crawlers see real content on first load, built from the same
+sample books and rewrite cache as `GET /api/samples/{slug}` (v0.4) -- a page costs nothing to
+render because the samples are pre-warmed at startup.
+
+| Method | Path | Returns |
+| --- | --- | --- |
+| GET | `/books` | HTML index of every sample book, linking to its page |
+| GET | `/books/{slug}` | HTML page for one sample: title `Read <Title>, dyslexia-friendly \| Unwind Words`, the first ~600 words of the rewritten text with a `<ruby>` phonetic map, a "Continue reading" link into `/read?sample=<slug>`, Gutenberg attribution, canonical link, OpenGraph/Twitter tags, and `Book`/`WebPage` JSON-LD (404 for an unknown slug) |
+| GET | `/sitemap.xml` | XML sitemap: `/`, `/pricing`, `/read`, `/assess`, `/books`, and `/books/<slug>` for every sample |
+| GET | `/robots.txt` | `Allow: /` plus the sitemap URL |
+
+Each book-page view is recorded through the same counter as `POST /api/track` below.
+
+## Newsletter
+
+Single opt-in for v1 (no confirmation email) -- signing up takes effect immediately. If
+`RESEND_API_KEY` is set (see `server/auth.py`), a one-line welcome email is sent with an
+unsubscribe link; otherwise signup still succeeds silently. Rate-limited in-process to 5 requests
+per minute per client IP.
+
+| Method | Path | Body | Returns |
+| --- | --- | --- | --- |
+| POST | `/api/newsletter` | `{email, source?}` | `{ok: true}` (400 invalid email, 429 rate-limited) |
+| GET | `/api/newsletter/unsubscribe?token=` | -- | `{ok: true, email}` -- `token` is an itsdangerous-signed email from the welcome email's unsubscribe link (400 if it doesn't verify) |
+
+`source` is a short free-text tag (e.g. `"landing"`, `"footer"`) for telling signups apart later;
+never required. Signing up again with the same address keeps the first-seen `source` and clears
+`unsubscribed_at`.
+
+Migration `server/migrations/008_marketing.sql` adds `newsletter_signups (email PK, source,
+created_at, confirmed_at, unsubscribed_at)`. `confirmed_at` is unused in v1 (reserved for a future
+double opt-in) and `DELETE /api/me` does not touch this table, since a newsletter signup does not
+require an account.
+
+## Page-view counter
+
+Cookie-free, IP-free: only a day, a path, and the referring site's hostname (never the full
+referrer URL) are kept, as a running count. Called once per route change from the SPA
+(`web/src/App.tsx`) and once per view from the server-rendered book pages above.
+
+| Method | Path | Body | Returns |
+| --- | --- | --- | --- |
+| POST | `/api/track` | `{path}` | `{ok: true}` |
+
+Migration `008_marketing.sql` adds `page_views (day, path, referrer_host, count)`, primary keyed on
+`(day, path, referrer_host)` with `referrer_host` defaulting to `''` (not `NULL`) when there was no
+referrer.
+
+## Admin stats
+
+404s outright when `ADMIN_KEY` is not set in the environment, or when the given `key` doesn't
+match it -- the route is invisible by default, not just unauthorized.
+
+| Method | Path | Returns |
+| --- | --- | --- |
+| GET | `/api/admin/stats?key=` | `{signups, page_views_30d: [{path, count}], users, pro_users, books, generated_at}` |
+
+`pro_users` (from `users.plan`, added by the billing migration) and `books` (from the `books`
+table, added by the library migration) are `null` when that column/table doesn't exist yet --
+guarded by a try/rollback per query, so this endpoint works whether or not those migrations have
+landed.
