@@ -110,22 +110,57 @@ report = analyze(text, profile)              # triggers, by kind, with reasons a
 result = rewrite(text, profile)              # result.text, result.all_changes(), result.stats
 ```
 
-### Optional local LLM engine
+### Optional LLM engine — local, or a cheap hosted tier
 
-`--engine llm` sends each paragraph, its trigger list and the reader's vocabulary to any OpenAI-compatible endpoint.
-The default is a local [Ollama](https://ollama.com) server, so it is free and nothing leaves the machine.
-Every paragraph the model returns is checked: names, numbers and quotes must survive verbatim and the length must
-stay in range, otherwise that paragraph falls back to the rule engine.
+`--engine llm` sends each paragraph, its trigger list and the reader's vocabulary to any OpenAI-compatible endpoint,
+concurrently (`DYSREWRITE_LLM_MAX_CONCURRENCY`, default 4) with the paragraph order preserved. The default is a
+local [Ollama](https://ollama.com) server, so it is free and nothing leaves the machine. Every paragraph the model
+returns goes through a fidelity gate — protected spans (names, numbers, quotes) must survive verbatim, the length
+must stay in range, the sentence count can't collapse, and no new proper noun can appear — plus an output cleanup
+(strips a "Here is..." preface, wrapping quotes, and any meta-comment about "rewriting"). Anything that fails falls
+back to the rule engine for that paragraph, and every rejection reason is counted in `result.stats["llm_rejections"]`.
 
 ```bash
 ollama pull llama3.1:8b
 dysrewrite rewrite chapter.txt --engine llm -p her.json
-# or the cheapest hosted option we have costed (about $0.10 per 90,000-word book, Sept 2026):
-DYSREWRITE_LLM_BASE_URL=https://api.deepseek.com/v1 DYSREWRITE_LLM_MODEL=deepseek-flash DYSREWRITE_LLM_API_KEY=sk-... \
-  dysrewrite rewrite book.epub --engine llm -p her.json
 ```
 
-Which model, what it costs, and why a small fine-tuned model is the end state: [docs/RESEARCH.md](docs/RESEARCH.md) §4.
+#### Cheap hosted engine
+
+The documented cheap option is [DeepSeek](https://api-docs.deepseek.com/quick_start/pricing) `deepseek-flash`,
+OpenAI-compatible, about **$0.10 for a 90,000-word book** off-peak with its automatic prompt cache (checked
+2026-09-18 — see [docs/RESEARCH.md](docs/RESEARCH.md) §4 for the arithmetic and the other providers we costed).
+Nothing about the engine is DeepSeek-specific — the same env vars work with any OpenAI-compatible host.
+
+```bash
+export DYSREWRITE_LLM_BASE_URL=https://api.deepseek.com/v1
+export DYSREWRITE_LLM_MODEL=deepseek-flash
+export DYSREWRITE_LLM_API_KEY=sk-...
+dysrewrite llm-check                              # ping the endpoint: model, latency, sane reply, prices in effect
+dysrewrite rewrite book.epub --engine llm -p her.json   # prints a cost estimate first for a >20k-char input on a TTY (-y skips it)
+```
+
+Config (all optional):
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `DYSREWRITE_LLM_BASE_URL` | `http://localhost:11434/v1` | OpenAI-compatible chat-completions endpoint |
+| `DYSREWRITE_LLM_MODEL` | `llama3.1:8b` | Model name sent in the request body |
+| `DYSREWRITE_LLM_API_KEY` | `ollama` | Bearer token (Ollama ignores it) |
+| `DYSREWRITE_LLM_MAX_CONCURRENCY` | `4` | Paragraphs rewritten in parallel |
+| `DYSREWRITE_LLM_TIMEOUT` | `90` | Per-request timeout, seconds |
+| `DYSREWRITE_LLM_MAX_RETRIES` | `3` | Retries on 429/5xx/timeout, exponential backoff, honours `Retry-After` |
+| `DYSREWRITE_LLM_PRICE_IN` / `_OUT` | DeepSeek off-peak (0.15 / 0.60) if the base URL contains "deepseek", else 0 | $ per 1M tokens, for `stats["llm_cost_usd"]` and the cost estimate |
+
+The stable part of the prompt (the system prompt, plus a fixed per-reader block — vocabulary and the sentence-length
+target — placed at the *start* of the user message) is identical across every paragraph rewritten for one reader, so
+DeepSeek's automatic prefix cache matches on it every call; the per-paragraph trigger list and the paragraph text
+itself (which change every call and matter least for caching) come last. `result.stats` gains `llm_usage` (prompt/
+completion tokens, plus DeepSeek's `prompt_cache_hit_tokens`/`prompt_cache_miss_tokens` when the response carries
+them) and `llm_cost_usd` whenever the model returns usage.
+
+Privacy note: whole books leave the machine with the hosted tier. That's fine for public-domain text and a reader's
+own purchases, by their own choice — it is never the default.
 
 ## How it works
 

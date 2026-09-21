@@ -13,6 +13,12 @@ primary_region = "ord"
   AUDIO_DIR = "/data/recordings"
   PUBLIC_BASE_URL = "https://unwindwords.com"
   BOOKS_DIR = "/data/books"
+  # Hosted LLM tier (Pro's "llm" book engine, src/dyslexic_rewrite/rewrite/llm.py). The base
+  # URL/model are not secret; DYSREWRITE_LLM_API_KEY is set via .github/workflows/secrets.yml,
+  # never here. Uncomment once a DeepSeek key is provisioned -- see docs/RESEARCH.md section 4.
+  # DYSREWRITE_LLM_BASE_URL = "https://api.deepseek.com/v1"
+  # DYSREWRITE_LLM_MODEL = "deepseek-flash"
+  DYSREWRITE_LLM_MAX_CONCURRENCY = "4"
 
 [mounts]
   source = "audio"

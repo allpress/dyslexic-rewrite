@@ -18,6 +18,7 @@ always False) so this module works alone and picks up the real thing once it lan
 from __future__ import annotations
 
 import base64
+import json
 import os
 import queue
 import re
@@ -131,6 +132,12 @@ def book_json(row: dict) -> dict[str, Any]:
         "finished_at": row["finished_at"].isoformat() if row["finished_at"] else None,
         "last_opened_at": row["last_opened_at"].isoformat() if row["last_opened_at"] else None,
         "kindle_sent_at": row["kindle_sent_at"].isoformat() if row["kindle_sent_at"] else None,
+        # Hosted-LLM tier visibility (migration 009_llm_cache.sql): null for a rules-engine book.
+        "cost_usd": float(row["cost_usd"]) if row.get("cost_usd") is not None else None,
+        "llm_usage": row.get("llm_usage"),
+        # "partial-llm" when more than 30% of some chapter's paragraphs fell back to the rules
+        # engine (see `_process_book`) -- lets the UI say "some paragraphs used the rules engine".
+        "engine_note": row.get("engine_note"),
     }
 
 
@@ -191,19 +198,31 @@ def create_book(user: dict, filename: str, data: bytes, title: str | None, autho
 # ---------------------------------------------------------------------------------------
 # rewriting a chapter -> segments the reader view can render, same shape as /api/rewrite
 # ---------------------------------------------------------------------------------------
-def render_chapter(text: str, profile, engine: str, mode: str) -> tuple[list[dict], dict, list[dict], bool]:
+def render_chapter(text: str, profile, engine: str, mode: str, llm_cache=None) -> tuple[list[dict], dict, list[dict], bool]:
     """(segments, stats, phonetic_map, cached). `engine='rules'` goes through the shared rewrite
     cache (server/cache.py) so a re-run under the same profile is instant; `engine='llm'` (Pro
-    only, see `_llm_configured`) always runs fresh -- the cache only ever stores rules output."""
+    only, see `_llm_configured`) rewrites paragraphs concurrently through the LLM engine, checking
+    the *paragraph*-level LLM cache first (`server/cache.py`'s `LlmCache`, built automatically
+    from `profile` when `llm_cache` isn't passed in) -- so a re-run under an unchanged profile,
+    or the same public-domain text for two readers who share a profile, calls the model for
+    nothing. `stats` additionally carries `llm_paragraphs`/`llm_fallbacks` (and `llm_usage`/
+    `llm_cost_usd` when the model returned usage) for the LLM engine."""
     if engine == "llm":
         from dyslexic_rewrite.analyze import analyze
+        from dyslexic_rewrite.rewrite import llm as llm_engine
         from dyslexic_rewrite.rewrite.engine import rewrite as _rewrite
+        if llm_cache is None:
+            llm_cache = cache.LlmCache(profile, llm_engine.model_name())
         report = analyze(text, profile)
-        result = _rewrite(text, profile, engine="llm", report=report)
+        result = _rewrite(text, profile, engine="llm", report=report, llm_cache=llm_cache)
         segs = service.to_segments(result)
         st = result.stats
         stats = {"sentences": st["sentences"], "sentences_changed": st["sentences_changed"],
-                 "changes": st["changes"], "load_before": st["load_before"], "load_after": st.get("load_after")}
+                 "changes": st["changes"], "load_before": st["load_before"], "load_after": st.get("load_after"),
+                 "llm_paragraphs": st.get("llm_paragraphs", 0), "llm_fallbacks": st.get("llm_fallbacks", 0)}
+        if st.get("llm_usage"):
+            stats["llm_usage"] = st["llm_usage"]
+            stats["llm_cost_usd"] = st.get("llm_cost_usd", 0.0)
         phon = service.compute_phonetic_map(segs, profile, mode)
         return segs, stats, phon, False
     return cache.cached_rewrite(text, profile, mode)
@@ -333,9 +352,27 @@ def _process_book(book_id: int) -> None:
         engine = book["engine"] if (book["engine"] == "llm" and billing.is_pro(user) and _llm_configured()) else "rules"
         epub_mode = "always" if getattr(profile, "phonetic_map", "off") != "off" else "off"
 
+        # One paragraph cache shared across every chapter of this book, so a chapter that
+        # repeats a phrase (or a re-run under a tweaked profile) never pays twice.
+        llm_cache_obj = None
+        if engine == "llm":
+            from dyslexic_rewrite.rewrite import llm as llm_engine
+            llm_cache_obj = cache.LlmCache(profile, llm_engine.model_name())
+        cost_total = 0.0
+        usage_totals: dict[str, int] = {}
+        any_chapter_partial = False
+
         rendered = []
         for i, ch in enumerate(chapters):
-            segs, _stats, phon, _cached = render_chapter(ch["text"], profile, engine, epub_mode)
+            segs, stats, phon, _cached = render_chapter(ch["text"], profile, engine, epub_mode, llm_cache=llm_cache_obj)
+            if engine == "llm":
+                lp, lf = stats.get("llm_paragraphs", 0), stats.get("llm_fallbacks", 0)
+                if (lp + lf) and lf / (lp + lf) > 0.3:
+                    any_chapter_partial = True
+                if stats.get("llm_cost_usd"):
+                    cost_total += stats["llm_cost_usd"]
+                for k, v in (stats.get("llm_usage") or {}).items():
+                    usage_totals[k] = usage_totals.get(k, 0) + v
             rendered.append({"title": ch["title"], "html": _segments_to_chapter_html(segs, phon)})
             with db.conn() as c:
                 c.execute(
@@ -348,12 +385,17 @@ def _process_book(book_id: int) -> None:
         write_epub(None, resolve_key(out_key), title=book["title"], author=book["author"],
                    chapters=rendered, profile=profile)
         words = sum(len(ch["text"].split()) for ch in chapters)
+        engine_note = "partial-llm" if (engine == "llm" and any_chapter_partial) else None
         with db.conn() as c:
             c.execute(
                 "UPDATE books SET status = 'ready', words = %s, chapters = %s, progress = %s, "
-                "output_key = %s, engine = %s, profile_fingerprint = %s, finished_at = now(), error = NULL "
+                "output_key = %s, engine = %s, profile_fingerprint = %s, finished_at = now(), error = NULL, "
+                "cost_usd = %s, llm_usage = %s, engine_note = %s "
                 "WHERE id = %s",
-                (words, len(chapters), len(chapters), out_key, engine, fp, book_id),
+                (words, len(chapters), len(chapters), out_key, engine, fp,
+                 round(cost_total, 6) if (engine == "llm" and usage_totals) else None,
+                 json.dumps(usage_totals) if (engine == "llm" and usage_totals) else None,
+                 engine_note, book_id),
             )
             c.commit()
     except Exception as e:

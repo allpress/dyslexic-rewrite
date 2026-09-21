@@ -388,7 +388,8 @@ itself at startup.
 `Book` = `{id, title, author: string|null, source_name, source_kind: "epub"|"txt"|"md", words,
 chapters, status: "queued"|"processing"|"ready"|"failed", engine: "rules"|"llm", progress,
 error: string|null, created_at, finished_at: string|null, last_opened_at: string|null,
-kindle_sent_at: string|null}`
+kindle_sent_at: string|null, cost_usd: number|null, llm_usage: object|null,
+engine_note: "partial-llm"|null}`
 
 - `chapters` is the total chapter count once the upload has been read (0 only for an instant
   before that finishes); `progress` is how many of those chapters have been rewritten so far --
@@ -397,6 +398,13 @@ kindle_sent_at: string|null}`
 - `engine` is `"rules"` unless the upload asked for `"llm"` *and* the reader is Pro *and* the
   server has an LLM configured (`DYSREWRITE_LLM_BASE_URL`/`DYSREWRITE_LLM_API_KEY`) -- otherwise
   it's silently downgraded to `"rules"`.
+- `cost_usd`/`llm_usage` are set once an `"llm"`-engine book finishes, summed across every
+  chapter (`llm_usage` is whatever token-usage fields the model returned -- `prompt_tokens`,
+  `completion_tokens`, and DeepSeek's `prompt_cache_hit_tokens`/`prompt_cache_miss_tokens` when
+  present); both stay `null` for a `"rules"`-engine book.
+- `engine_note` is `"partial-llm"` when more than 30% of some chapter's paragraphs failed the
+  LLM engine's fidelity gate and fell back to the rules engine, so the reader can be told "some
+  paragraphs used the rules engine"; `null` otherwise.
 
 | Method | Path | Body | Returns |
 | --- | --- | --- | --- |
@@ -439,6 +447,36 @@ source_key, output_key, progress, created_at, finished_at, last_opened_at, kindl
 Env vars: `BOOKS_DIR` (default `./data/books`), plus the LLM engine's existing
 `DYSREWRITE_LLM_BASE_URL`/`DYSREWRITE_LLM_API_KEY` (see `src/dyslexic_rewrite/rewrite/llm.py`) to
 allow Pro readers the `"llm"` engine.
+
+### Hosted LLM tier (v0.6)
+
+The `"llm"` book engine (Pro only) rewrites a book's paragraphs concurrently
+(`DYSREWRITE_LLM_MAX_CONCURRENCY`, default 4) through
+`dyslexic_rewrite.rewrite.engine.rewrite(..., engine="llm")`, going through a *paragraph*-level
+cache (`server/cache.py`'s `LlmCache`, migration `009_llm_cache.sql`) keyed on
+`sha256(model | prompt version | profile fingerprint | paragraph)` -- so a re-run under an
+unchanged profile, or the same public-domain book rewritten for two readers who share a profile,
+calls the model for nothing. Only an accepted (fidelity-gate-passing) rewrite is ever cached.
+
+Every paragraph the model returns goes through the fidelity gate documented in
+`src/dyslexic_rewrite/rewrite/llm.py` (protected spans, length ratio, sentence-count sanity, no
+new proper nouns) and falls back to the rules engine on any rejection. When more than 30% of a
+chapter's paragraphs fall back this way, the book's `engine_note` is set to `"partial-llm"`
+(migration `009_llm_cache.sql`, which also adds `books.cost_usd`/`books.llm_usage`) so the web
+app can tell the reader some of the book used the rules engine.
+
+Cost/usage are summed across every chapter and surfaced on `GET /api/books/{id}` as
+`cost_usd`/`llm_usage` (see the `Book` shape above), using
+`DYSREWRITE_LLM_PRICE_IN`/`DYSREWRITE_LLM_PRICE_OUT` (default: DeepSeek off-peak pricing when the
+base URL contains "deepseek", else $0 -- see `src/dyslexic_rewrite/rewrite/llm.py`).
+
+The provider is documented and costed as DeepSeek `deepseek-flash` (docs/RESEARCH.md, section 4)
+but nothing here is DeepSeek-specific -- any OpenAI-compatible endpoint, including a local
+Ollama, works identically. `dysrewrite llm-check` (CLI) pings the configured endpoint and reports
+latency, a sanity check, and the price configuration in effect.
+
+Migration: `server/migrations/009_llm_cache.sql` adds `llm_cache (key, model, output, usage,
+created_at, hits)` and `books.cost_usd` / `books.llm_usage` / `books.engine_note`.
 # Marketing (v0.5)
 
 The launch marketing surface: server-rendered SEO book pages (real HTML, not the SPA), a

@@ -318,3 +318,91 @@ def test_delete_account_removes_all_books(signed_in):
     r = c.post("/api/auth/request-code", json={"email": BOOK_EMAIL}).json()
     c.post("/api/auth/verify", json={"email": BOOK_EMAIL, "code": r["dev_code"]})
     assert c.get(f"/api/books/{book_id}").status_code == 404
+
+
+# =========================================================================================
+# Hosted LLM engine (v0.6): server/cache.py's paragraph cache, server/library.py's cost/usage
+# rollup and `engine_note`. No real network call -- an in-process mock via the
+# DYSREWRITE_LLM_TRANSPORT test hook (see tests/test_llm.py for the engine-level tests).
+# =========================================================================================
+def test_llm_engine_book_records_cost_usage_and_no_partial_note(signed_in, monkeypatch):
+    import json as _json
+
+    import httpx
+
+    from dyslexic_rewrite.rewrite import llm as llm_engine
+
+    monkeypatch.setenv("DYSREWRITE_LLM_BASE_URL", "https://api.deepseek.com/v1")
+    monkeypatch.setattr(library.billing, "is_pro", lambda user: True)
+
+    def handler(request):
+        body = _json.loads(request.content)
+        user_msg = body["messages"][1]["content"]
+        paragraph = user_msg.rsplit("PARAGRAPH:\n", 1)[1]
+        return httpx.Response(200, json={
+            "choices": [{"message": {"content": paragraph}}],
+            "usage": {"prompt_tokens": 500, "completion_tokens": 20,
+                      "prompt_cache_hit_tokens": 400, "prompt_cache_miss_tokens": 100},
+        })
+
+    llm_engine.DYSREWRITE_LLM_TRANSPORT = httpx.MockTransport(handler)
+    try:
+        c = signed_in
+        up = c.post("/api/books", files={"file": ("book.txt", BOOK_TXT, "text/plain")}, data={"engine": "llm"})
+        assert up.status_code == 201, up.text
+        assert up.json()["engine"] == "llm"
+
+        library.run_pending()
+
+        got = c.get(f"/api/books/{up.json()['id']}").json()
+        assert got["status"] == "ready"
+        assert got["cost_usd"] is not None and got["cost_usd"] > 0
+        assert got["llm_usage"]["prompt_tokens"] > 0
+        assert got["engine_note"] is None  # every paragraph was accepted, nothing fell back
+    finally:
+        llm_engine.DYSREWRITE_LLM_TRANSPORT = None
+
+
+def test_llm_paragraph_cache_avoids_a_second_model_call(signed_in, monkeypatch):
+    """A second book with the *same paragraph text* under the same profile hits the paragraph
+    cache (server/cache.py) instead of calling the model again."""
+    import json as _json
+    import uuid
+
+    import httpx
+
+    from dyslexic_rewrite.rewrite import llm as llm_engine
+
+    monkeypatch.setenv("DYSREWRITE_LLM_BASE_URL", "https://api.deepseek.com/v1")
+    monkeypatch.setattr(library.billing, "is_pro", lambda user: True)
+    monkeypatch.setattr(library.billing, "quota", lambda user: {"books_total": None, "paste_chars": 200_000, "llm_tier": True})
+
+    # A paragraph unique to this test run, so a cache row left by an earlier test can't hide a
+    # real cache miss on the first upload.
+    marker = uuid.uuid4().hex
+    book_txt = f"Chapter 1\n\nThe wind blew hard across the moor, marker {marker}, that night.\n".encode()
+
+    calls = {"n": 0}
+
+    def handler(request):
+        calls["n"] += 1
+        body = _json.loads(request.content)
+        user_msg = body["messages"][1]["content"]
+        paragraph = user_msg.rsplit("PARAGRAPH:\n", 1)[1]
+        return httpx.Response(200, json={"choices": [{"message": {"content": paragraph}}]})
+
+    llm_engine.DYSREWRITE_LLM_TRANSPORT = httpx.MockTransport(handler)
+    try:
+        c = signed_in
+        up1 = c.post("/api/books", files={"file": ("book1.txt", book_txt, "text/plain")}, data={"engine": "llm"})
+        assert up1.status_code == 201, up1.text
+        library.run_pending()
+        first_calls = calls["n"]
+        assert first_calls > 0
+
+        up2 = c.post("/api/books", files={"file": ("book2.txt", book_txt, "text/plain")}, data={"engine": "llm"})
+        assert up2.status_code == 201, up2.text
+        library.run_pending()
+        assert calls["n"] == first_calls  # identical paragraphs, same profile -> cache hit, no new calls
+    finally:
+        llm_engine.DYSREWRITE_LLM_TRANSPORT = None

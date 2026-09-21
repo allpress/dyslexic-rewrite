@@ -124,6 +124,64 @@ def cached_rewrite(
     return segments, stats, _served_map(entries, profile, mode), False
 
 
+
+# ---------------------------------------------------------------------------------------
+# LLM paragraph cache (migration 009_llm_cache.sql): keyed on model + prompt version + profile
+# fingerprint + the paragraph's own text, so a small profile tweak -- or the same public-domain
+# book rewritten for two readers who happen to share a profile -- calls the model for nothing.
+# Only ever stores an *accepted* rewrite (server/library.py's `LlmCache.put` is only offered
+# outcomes whose fidelity gate already passed); a rejection or a network error is never cached.
+# ---------------------------------------------------------------------------------------
+def llm_cache_key(paragraph: str, profile: ReaderProfile, model: str) -> str:
+    from dyslexic_rewrite.rewrite.llm import PROMPT_VERSION
+    fp = profile_fingerprint(profile)
+    return hashlib.sha256("|".join([model, PROMPT_VERSION, fp, paragraph]).encode("utf-8")).hexdigest()
+
+
+def llm_cache_get(key: str) -> dict[str, Any] | None:
+    with db.conn() as c:
+        row = c.execute(
+            "UPDATE llm_cache SET hits = hits + 1 WHERE key = %s RETURNING output, usage",
+            (key,),
+        ).fetchone()
+        c.commit()
+    return dict(row) if row else None
+
+
+def llm_cache_put(key: str, model: str, output: str, usage: dict | None) -> None:
+    with db.conn() as c:
+        c.execute(
+            "INSERT INTO llm_cache (key, model, output, usage) VALUES (%s, %s, %s, %s) "
+            "ON CONFLICT (key) DO NOTHING",
+            (key, model, output, json.dumps(usage or {})),
+        )
+        c.commit()
+
+
+class LlmCache:
+    """Adapts the table above to `dyslexic_rewrite.rewrite.llm.ParagraphCacheProtocol`, for one
+    (profile, model) pair -- pass a fresh instance whenever either changes."""
+
+    def __init__(self, profile: ReaderProfile, model: str) -> None:
+        self.profile = profile
+        self.model = model
+
+    def _key(self, paragraph: str) -> str:
+        return llm_cache_key(paragraph, self.profile, self.model)
+
+    def get(self, paragraph: str):
+        from dyslexic_rewrite.rewrite.llm import LlmParagraphOutcome
+        row = llm_cache_get(self._key(paragraph))
+        if row is None:
+            return None
+        return LlmParagraphOutcome(text=row["output"], usage=row.get("usage") or {})
+
+    def put(self, paragraph: str, outcome) -> None:
+        if outcome.text is None:
+            return
+        llm_cache_put(self._key(paragraph), self.model, outcome.text, outcome.usage)
+
+
 def warm_samples() -> None:
     """Pre-populate the cache for the sample books under the default profile, so the first
     reader to try one doesn't pay for the analyze/rewrite pass. Called from the app's startup

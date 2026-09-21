@@ -19,6 +19,13 @@ from .rewrite.engine import rewrite as _rewrite
 _PHONETIC_MAP_CHOICES = ["off", "on_demand", "always"]
 
 
+def _is_interactive() -> bool:
+    """Whether to show the `--engine llm` cost-confirmation prompt. A tiny wrapper (instead of
+    calling `sys.stdin.isatty()` inline) so tests can force it without fighting Click's own
+    stdin handling under `CliRunner`."""
+    return sys.stdin.isatty()
+
+
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
 @click.version_option(__version__, prog_name="dysrewrite")
 def main():
@@ -88,7 +95,8 @@ main.add_command(analyze_cmd, name="analyze")
 @click.option("--epub", "want_epub", is_flag=True,
               help="Also write an EPUB (automatic when the input file is itself .epub)")
 @click.option("-v", "--verbose", is_flag=True)
-def rewrite(file, profile_name, out_dir, engine, formats, simplify_vocab, phonetic_map, want_epub, verbose):
+@click.option("-y", "--yes", is_flag=True, help="Skip the cost confirmation prompt for --engine llm")
+def rewrite(file, profile_name, out_dir, engine, formats, simplify_vocab, phonetic_map, want_epub, verbose, yes):
     """Rewrite a .txt/.md/.html/.epub file and write an HTML reader view next to plain text."""
     profile = load_profile(profile_name)
     if phonetic_map:
@@ -96,6 +104,13 @@ def rewrite(file, profile_name, out_dir, engine, formats, simplify_vocab, phonet
     text = read_text(file)
     if not text.strip():
         raise click.ClickException("No text found in the file.")
+    if engine == "llm" and len(text) > 20_000 and _is_interactive():
+        from .rewrite.llm import estimate_cost
+        est = estimate_cost(text)
+        click.echo(f"Estimated cost: ~${est['est_usd']:.4f} for {est['paragraphs']} paragraphs "
+                   f"(~{est['est_input_tokens']} in / ~{est['est_output_tokens']} out tokens).")
+        if not yes:
+            click.confirm("Proceed?", abort=True)
     report = analyze(text, profile)
     result = _rewrite(text, profile, engine=engine, simplify_vocab=simplify_vocab, report=report, verbose=verbose)
     stem = Path(file).stem + f".{profile.name}"
@@ -106,6 +121,10 @@ def rewrite(file, profile_name, out_dir, engine, formats, simplify_vocab, phonet
     click.echo(f"reading load {st['load_before']} → {st.get('load_after', '?')} per 100 words")
     if engine == "llm":
         click.echo(f"llm paragraphs {st['llm_paragraphs']}, fell back to rules {st['llm_fallbacks']}")
+        if st.get("llm_rejections"):
+            click.echo("  rejections: " + ", ".join(f"{k} {v}" for k, v in st["llm_rejections"].items()))
+        if st.get("llm_usage"):
+            click.echo(f"  usage: {st['llm_usage']}  est. cost ${st.get('llm_cost_usd', 0):.4f}")
     for p in written:
         click.echo(f"wrote {p}")
     if want_epub or Path(file).suffix.lower() == ".epub":
@@ -307,6 +326,30 @@ def assess(results_path, profile_name, out_path):
 
 
 main.add_command(assess, name="assess")
+
+
+# --------------------------------------------------------------------------------------
+@main.command("llm-check")
+@click.option("-m", "--model", "model_override", default=None, help="Override DYSREWRITE_LLM_MODEL for this check")
+def llm_check(model_override):
+    """Ping the configured LLM endpoint with a one-sentence probe.
+
+    Reports the model, round-trip latency, whether the reply looks sane, and the price
+    configuration currently in effect (docs/RESEARCH.md, section 4).
+    """
+    from .rewrite.llm import check_connection
+    result = check_connection(model_override)
+    click.echo(f"endpoint     {result['base_url']}")
+    click.echo(f"model        {result['model']}")
+    click.echo(f"latency      {result['latency_ms']:.0f} ms")
+    click.echo(f"sane reply   {'yes' if result['sane'] else 'no'}")
+    click.echo(f"pricing      ${result['price_in']:.3f}/M in, ${result['price_out']:.3f}/M out")
+    if not result["ok"]:
+        raise click.ClickException(result.get("error", "the endpoint did not respond"))
+    click.echo(f"reply        {result['reply']!r}")
+
+
+main.add_command(llm_check, name="llm-check")
 
 
 if __name__ == "__main__":  # pragma: no cover
