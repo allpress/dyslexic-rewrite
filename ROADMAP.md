@@ -4,7 +4,7 @@ Four phases. Each is usable on its own; each later phase adds a layer without re
 
 ## Principles
 
-1. **Free, forever.** MIT. No accounts, no paid tier. Anything that costs money (hosted LLMs) is optional; the default path runs on a laptop with open models or no model at all.
+1. **Free, forever.** The engine is MIT and the site's reading tools are free. The site sells convenience (whole-book conversion, a library, Kindle delivery) as a small Pro plan that pays the hosting bill; see [docs/BUSINESS.md](docs/BUSINESS.md). The default path runs on a laptop with open models or no model at all.
 2. **Local-first.** Profiles, writing samples and the books someone reads stay on their machine. Personal writing is sensitive data.
 3. **Never destroy the original.** Every change is reversible and visible on demand. The reader can always see the original word or sentence.
 4. **Meaning is protected.** Names, numbers, quotes, dialogue and domain terms are locked spans. A rewrite that changes meaning is a bug.
@@ -60,6 +60,8 @@ Outcome: a profile learned from the reader's own writing and speech that beats t
 - [ ] Done when: the personal profile measurably beats the type profile for that reader
 
 ## Phase 4 — Measurement and community
+
+- [x] Pro plan (Stripe), library with EPUB in/out and send-to-Kindle, SEO book pages, newsletter, legal pages — the micro-SaaS layer (docs/BUSINESS.md)
 
 - [x] Built-in A/B reading test on the site: matched passage pairs, original vs rewritten, timer + 5 questions
 - [x] Sample books on /read (Gutenberg excerpts) with a Postgres rewrite cache so nothing is regenerated twice

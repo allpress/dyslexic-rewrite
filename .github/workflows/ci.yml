@@ -49,7 +49,8 @@ jobs:
       - run: pip install -e ".[dev,epub]" -r server/requirements.txt
       - run: python -m spacy download en_core_web_sm
       - run: mkdir -p web/dist/assets && echo '<!doctype html><title>x</title>' > web/dist/index.html
-      - run: pytest -q tests/test_server.py
+      - run: pytest -q tests/test_server.py tests/test_billing.py tests/test_library.py tests/test_marketing.py
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/dysrewrite
           WARM_SAMPLES: "0"   # the cache tests warm what they need; no background spaCy thread at exit
+          LIBRARY_WORKER: "0" # tests drive the book worker synchronously
