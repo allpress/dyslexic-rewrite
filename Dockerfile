@@ -14,7 +14,7 @@ WORKDIR /app
 COPY pyproject.toml README.md ./
 COPY src/ ./src/
 COPY server/requirements.txt ./server/requirements.txt
-RUN pip install -e ".[epub]" -r server/requirements.txt \
+RUN pip install -e ".[epub,docs]" -r server/requirements.txt \
  && python -m spacy download en_core_web_sm
 
 COPY server/ ./server/

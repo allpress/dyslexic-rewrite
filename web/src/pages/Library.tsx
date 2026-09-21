@@ -208,14 +208,16 @@ export default function Library() {
           <input
             ref={fileInput}
             type="file"
-            accept=".epub,.txt,.md"
+            accept=".epub,.txt,.md,.pdf,.docx"
             style={{ display: 'none' }}
             disabled={uploading}
             onChange={(e) => void handleFiles(e.target.files)}
           />
         </label>
         <p className="muted">
-          .epub, .txt, or .md, up to 25 MB. Your first book is free; <Link to="/pricing">Pro for unlimited</Link>.
+          .epub, .txt, .md, .pdf, or .docx, up to 25 MB. Your first book is free;{' '}
+          <Link to="/pricing">Pro for unlimited</Link>. A scanned PDF (no selectable text) can&rsquo;t be
+          read yet — OCR isn&rsquo;t supported.
         </p>
         {uploading && <p className="muted">Uploading…</p>}
       </div>

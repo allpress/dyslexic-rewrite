@@ -31,8 +31,12 @@ epub = ["ebooklib>=0.18", "beautifulsoup4>=4.12"]
 wordnet = ["nltk>=3.8"]
 llm = ["httpx>=0.27"]
 speech = ["faster-whisper>=1.0"]
+# PDF/DOCX import into "Your library" (server/library.py; src/dyslexic_rewrite/io.py's
+# read_chapters). Named "docs" for the document formats it adds, not to be confused with
+# project documentation.
+docs = ["pypdf>=4", "python-docx>=1.1"]
 dev = ["pytest>=8", "ruff>=0.5"]
-all = ["dyslexic-rewrite[epub,wordnet,llm,dev]"]
+all = ["dyslexic-rewrite[epub,wordnet,llm,docs,dev]"]
 
 [project.scripts]
 dysrewrite = "dyslexic_rewrite.cli:main"

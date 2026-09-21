@@ -397,7 +397,7 @@ Processing runs on a single background worker thread with a queue, started from 
 lifespan hook (`server/library.py`). A book left `queued`/`processing` by a restart re-queues
 itself at startup.
 
-`Book` = `{id, title, author: string|null, source_name, source_kind: "epub"|"txt"|"md", words,
+`Book` = `{id, title, author: string|null, source_name, source_kind: "epub"|"txt"|"md"|"pdf"|"docx", words,
 chapters, status: "queued"|"processing"|"ready"|"failed", engine: "rules"|"llm", progress,
 error: string|null, created_at, finished_at: string|null, last_opened_at: string|null,
 kindle_sent_at: string|null, cost_usd: number|null, llm_usage: object|null,
@@ -420,7 +420,7 @@ engine_note: "partial-llm"|null}`
 
 | Method | Path | Body | Returns |
 | --- | --- | --- | --- |
-| POST | `/api/books` | multipart: `file` (.epub/.txt/.md), `title?`, `author?`, `engine?` | `Book` (201) |
+| POST | `/api/books` | multipart: `file` (.epub/.txt/.md/.pdf/.docx), `title?`, `author?`, `engine?` | `Book` (201) |
 | GET | `/api/books` | -- | `[Book]`, newest first |
 | GET | `/api/books/{id}` | -- | `Book` -- poll this for status/progress |
 | GET | `/api/books/{id}/read?chapter=n` | -- | same shape as `POST /api/rewrite`, plus `{chapter, chapters, title}` -- 409 until `status == "ready"` |
@@ -430,14 +430,18 @@ engine_note: "partial-llm"|null}`
 | DELETE | `/api/books/{id}` | -- | `{ok: true}` -- removes the row and its files |
 
 Rules the server enforces:
-- **Upload limits**: at most 25 MB; `.epub`/.txt`/`.md` only; at most 300,000 words for anyone,
-  and at most 60,000 words for a free reader (a longer book needs Pro). Rejections come back as
-  400 (bad file/too long outright) or 402 (fixable by upgrading).
+- **Upload limits**: at most 25 MB; `.epub`/`.txt`/`.md`/`.pdf`/`.docx` only; at most 300,000
+  words for anyone, and at most 60,000 words for a free reader (a longer book needs Pro).
+  Rejections come back as 400 (bad file/too long outright) or 402 (fixable by upgrading).
 - **Book quota**: `billing.quota(user).books_total` -- a free reader gets exactly one book, ever;
   a second upload is a 402 that says so. Pro is unlimited (`books_total: null`).
 - A book's chapters come from `dyslexic_rewrite.io.read_chapters` (EPUB spine order with heading
   detection; `.txt`/`.md` split on headings or "Chapter N" lines, falling back to ~8,000-word
-  chunks of the whole file). Each chapter is rewritten with `dyslexic_rewrite.rewrite.engine.rewrite`
+  chunks of the whole file; `.pdf` extracts text per page with `pypdf` then splits the same way
+  as `.txt`; `.docx` splits on paragraphs styled "Heading *" via `python-docx`, titled from the
+  heading text). A `.pdf` with no extractable text at all (a straight image scan) is rejected
+  with "This PDF is a scan — OCR isn't supported yet"; OCR is out of scope. Each chapter is
+  rewritten with `dyslexic_rewrite.rewrite.engine.rewrite`
   under the reader's own profile, going through the same rewrite cache as `/api/rewrite`
   (`server/cache.py`) -- so `POST /api/books/{id}/rerun` under an unchanged profile is instant.
 - **Send to Kindle** emails the EPUB as a base64 attachment via Resend (reusing `auth.py`'s
@@ -454,11 +458,15 @@ Rules the server enforces:
 Migration: `server/migrations/007_library.sql` adds `books (id, user_id, title, author,
 source_name, source_kind, words, chapters, status, engine, profile_fingerprint, error,
 source_key, output_key, progress, created_at, finished_at, last_opened_at, kindle_sent_at)` and
-`users.kindle_email`.
+`users.kindle_email`. `server/migrations/011_import_dictionary_summaries.sql` (v0.6) widens the
+`source_kind` CHECK constraint to add `"pdf"`/`"docx"`.
 
 Env vars: `BOOKS_DIR` (default `./data/books`), plus the LLM engine's existing
 `DYSREWRITE_LLM_BASE_URL`/`DYSREWRITE_LLM_API_KEY` (see `src/dyslexic_rewrite/rewrite/llm.py`) to
 allow Pro readers the `"llm"` engine.
+
+PDF/DOCX support needs `pypdf`/`python-docx` (`server/requirements.txt`, or the package's own
+`dyslexic-rewrite[docs]` extra).
 
 ### Hosted LLM tier (v0.6)
 
@@ -638,3 +646,118 @@ page, context, status, tags, admin_note, created_at, updated_at)` with an index 
 `(status, created_at)`. `user_id` is `ON DELETE SET NULL` (not `CASCADE`, unlike most other
 tables): deleting an account detaches its feedback from who sent it but keeps the feedback itself,
 since that is exactly the record the weekly rollup needs.
+
+# Import (v0.6)
+
+Bring an article straight into "Read anything" from a URL instead of copy-pasting it, the same
+parity feature Helperbird offers. Implementation: `server/importer.py`.
+
+| Method | Path | Body | Auth | Returns |
+| --- | --- | --- | --- | --- |
+| POST | `/api/import/url` | `{url}` | none (anonymous allowed) | `ImportResult` |
+
+`ImportResult` = `{title: string|null, byline: string|null, text, words, source_url, note:
+string|null}` -- `source_url` is the URL actually fetched (after following any redirects);
+`note` is set only when the article was longer than the caller's paste-quota limit and got cut
+off to fit (see below).
+
+The server fetches the page itself (so the browser needs no CORS access to an arbitrary site)
+and extracts the article body with `trafilatura`, falling back to `readability-lxml` if that
+isn't installed; 503 if neither is available on this server. `title`/`byline` come from
+whichever extractor found them and may be null.
+
+Rules the server enforces:
+- **Scheme**: only `http://`/`https://`; anything else is a 400.
+- **SSRF hardening**: the hostname (and every redirect target) is resolved and checked against
+  loopback/private/link-local/reserved/multicast/unspecified address ranges before any request
+  is made -- `localhost`, `127.0.0.1`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`,
+  `169.254.0.0/16` (including the cloud metadata address), etc. are all rejected with 400.
+- **Redirects**: at most 3 hops, each one re-validated the same way as the original URL; more
+  than that is a 400.
+- **Size and time**: a 10-second timeout and a 2MB cap on the response body (enforced while
+  streaming, not after buffering the whole thing); a `Content-Type` that isn't HTML/XML is
+  rejected with 400.
+- **User-Agent**: requests identify as `UnwindWords/0.2 (+https://unwindwords.com)`.
+- **Quota**: `text` is capped to the caller's `billing.quota(user).paste_chars` (anonymous gets
+  the free limit, same as `POST /api/rewrite`) -- an over-limit article is truncated to fit
+  rather than rejected outright, with `note` pointing at Pro (a bigger limit) or the library (the
+  whole book, chapter by chapter).
+- **Caching**: a successful import is cached in-process, keyed on a hash of the requested URL,
+  for one hour -- re-importing the same link does not refetch or re-extract it. Not shared across
+  workers/instances or persisted to Postgres.
+
+Web app: Read anything gets a "From a web page" tab beside the paste box -- a URL field that
+imports and fills the textarea; the reader still presses Rewrite themselves (or the box is ready
+for the mic/dictation feature below).
+
+Dependency: `trafilatura` (`server/requirements.txt`); `readability-lxml` is an optional
+fallback, used only if installed.
+
+# Dictionary (v0.6)
+
+"Define on tap", the other Helperbird-parity feature: look up any word from
+`api.dictionaryapi.dev` (free, keyless) without leaving the page. Implementation:
+`server/dictionary.py`.
+
+| Method | Path | Query | Auth | Returns |
+| --- | --- | --- | --- | --- |
+| GET | `/api/define` | `word` | none (anonymous allowed) | `Definition` (404 if unknown) |
+
+`Definition` = `{word, phonetic: string|null, meanings: [{pos, definition, example:
+string|null}], audio_url: string|null}` -- trimmed to at most 3 meanings, one definition per
+meaning (the upstream response's first one).
+
+Rules the server enforces:
+- `word` must look like a single word (letters, apostrophes, hyphens and spaces only, 1-50
+  chars) -- anything else is a 400.
+- Rate-limited in-process to 60 requests per minute per client IP (same in-process-only caveat
+  as the newsletter/feedback limiters elsewhere in this document).
+- Cached in Postgres (`definitions`, keyed on the lowercased word) with a 2-second upstream
+  timeout, so a repeated lookup -- a common word, several readers -- never re-hits the upstream
+  API. A definite "not found" is cached too, so a typo doesn't hammer it either.
+
+Web app: `components/DefineChip.tsx` -- select any single word anywhere in a passage (Read
+anything, a library chapter), including a marked/underlined one, and a small "Define" chip
+appears next to it; tapping it looks the word up and shows the definition in place, with its own
+pronunciation (phonetic spelling + a speaker button) alongside the meanings.
+
+Migration: `server/migrations/011_import_dictionary_summaries.sql` adds `definitions (word PK,
+payload JSONB, fetched_at)`.
+
+# Summaries (v0.6, Pro)
+
+A short, plain-language AI summary of a passage or a library book's chapter, for orientation --
+never a substitute for reading the text itself, and the UI labels it that way. Uses the same
+optional, OpenAI-compatible LLM engine as the hosted `"llm"` book/rewrite tier
+(`src/dyslexic_rewrite/rewrite/llm.py`), so it needs no configuration beyond
+`DYSREWRITE_LLM_BASE_URL`/`DYSREWRITE_LLM_API_KEY`. Implementation: `server/summaries.py`.
+
+| Method | Path | Body | Auth | Returns |
+| --- | --- | --- | --- | --- |
+| POST | `/api/summaries` | `{text}` | Pro (402 otherwise) | `Summary` |
+| POST | `/api/books/{id}/summary?chapter=n` | -- | signed in, own book, Pro (402 otherwise) | `Summary` (404 unknown book/chapter, 409 book not ready) |
+
+`Summary` = `{bullets: [string], summary}` -- `bullets` is 3 to 6 short bullet points;
+`summary` is the same content as one Markdown-style string (`"- bullet one\n- bullet two"`), for
+a caller that wants to render it directly. The book-chapter route adds `chapter`/`title`.
+
+Both routes return **503** `"Summaries need the hosted engine — not set up on this server yet"`
+when no LLM is configured at all, distinct from the 402 Pro gate (which fires regardless of
+configuration, so a free reader is told about Pro, never about the engine).
+
+Fidelity: unlike the rewrite engine, a summary necessarily drops detail, so there is no
+automated fidelity gate here -- the prompt itself is the safeguard, instructing the model to add
+nothing that is not in the text and to keep every bullet traceable back to it. This is a weaker
+guarantee than the rewrite engine's protected-span/length-ratio/entity checks, which is why the
+web app renders the result under a plain label: "AI summary — read the text for the details".
+
+Cached in Postgres (`summaries`, keyed on `sha256(model | prompt version | profile fingerprint |
+max_sentence_words | text)`, the same spirit as `llm_cache` from the hosted LLM tier) -- a
+re-summarise of the same text under an unchanged profile costs nothing to run again.
+
+Web app: a "Summary" button -- in the library reader (`BookReader.tsx`) for every reader, with a
+Pro badge/upgrade nudge in place of a working button when the reader isn't Pro; on Read anything,
+shown only once a signed-in Pro reader has a result to summarise.
+
+Migration: `server/migrations/011_import_dictionary_summaries.sql` adds `summaries (key PK,
+text, created_at)`.

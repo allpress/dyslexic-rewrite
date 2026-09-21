@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import ReadAnything from '../pages/Read';
 import { MeProvider } from '../useMe';
-import type { SampleInfo, SampleResponse } from '../api';
+import type { PlanSummary, RewriteResponse, SampleInfo, SampleResponse, User } from '../api';
 
 function reply(status: number, body: unknown) {
   return Promise.resolve({
@@ -147,5 +147,207 @@ describe('Read anything — sample books', () => {
       expect(attribution?.textContent).toMatch(/From\s*Alice's Adventures in Wonderland\s*by Lewis Carroll, 1865/);
     });
     expect(screen.queryByRole('dialog', { name: 'Choose a sample book' })).not.toBeInTheDocument();
+  });
+});
+
+// ===========================================================================================
+// v0.6: import from a web page, dictionary "define on select", and AI summaries
+// ===========================================================================================
+function userWith(plan: PlanSummary): User {
+  return {
+    id: 'u1',
+    email: 'doug@example.com',
+    name: 'Doug',
+    base_profile: 'default',
+    onboarded: true,
+    has_personal_profile: false,
+    phonetic_map: 'on_demand',
+    kindle_email: null,
+    plan,
+    created_at: '2026-09-17T10:00:00Z',
+  };
+}
+
+const FREE_PLAN: PlanSummary = { plan: 'free', pro: false, plan_until: null, cancel_at_period_end: false, manageable: false };
+const PRO_PLAN: PlanSummary = { plan: 'pro', pro: true, plan_until: null, cancel_at_period_end: false, manageable: true };
+
+const REWRITE_RESULT: RewriteResponse = {
+  segments: [{ t: 'text', s: 'The clock struck noon.' }],
+  stats: { sentences: 1, sentences_changed: 0, changes: 0, load_before: 1, load_after: 1 },
+  phonetic_map: [],
+  cached: false,
+};
+
+describe('Read anything — import from a web page (v0.6)', () => {
+  beforeEach(() => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        const method = init?.method ?? 'GET';
+        if (url === '/api/me' && method === 'GET') return reply(401, { error: 'Please sign in.' });
+        if (url === '/api/import/url' && method === 'POST') {
+          return reply(200, {
+            title: 'A Test Article',
+            byline: 'By Someone',
+            text: 'The imported article text goes here.',
+            words: 6,
+            source_url: 'https://example.com/article',
+            note: null,
+          });
+        }
+        return reply(404, { error: `unexpected ${method} ${url}` });
+      }),
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('imports a URL into the paste box on the "From a web page" tab', async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={['/read']} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <MeProvider>
+          <ReadAnything />
+        </MeProvider>
+      </MemoryRouter>,
+    );
+
+    await user.click(await screen.findByRole('tab', { name: 'From a web page' }));
+    const urlInput = await screen.findByPlaceholderText('https://example.com/an-article');
+    await user.type(urlInput, 'https://example.com/article');
+    await user.click(screen.getByRole('button', { name: 'Import' }));
+
+    const textarea = (await screen.findByLabelText(
+      'Paste anything: an email, an article, a chapter',
+    )) as HTMLTextAreaElement;
+    await waitFor(() => expect(textarea.value).toBe('The imported article text goes here.'));
+  });
+});
+
+describe('Read anything — Summary (v0.6, Pro)', () => {
+  function stubFetch(user: User | null) {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        const method = init?.method ?? 'GET';
+        if (url === '/api/me' && method === 'GET') {
+          return user ? reply(200, { user, profile: null }) : reply(401, { error: 'Please sign in.' });
+        }
+        if (url === '/api/rewrite' && method === 'POST') return reply(200, REWRITE_RESULT);
+        if (url === '/api/summaries' && method === 'POST') {
+          return reply(200, { bullets: ['The clock struck noon.'], summary: '- The clock struck noon.' });
+        }
+        return reply(404, { error: `unexpected ${method} ${url}` });
+      }),
+    );
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  async function rewriteSomething() {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={['/read']} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <MeProvider>
+          <ReadAnything />
+        </MeProvider>
+      </MemoryRouter>,
+    );
+    const textarea = await screen.findByLabelText('Paste anything: an email, an article, a chapter');
+    await user.type(textarea, 'The clock struck noon.');
+    await user.click(screen.getByRole('button', { name: 'Rewrite it' }));
+    await screen.findByText(/sentences changed/);
+    return user;
+  }
+
+  it('shows an upgrade nudge instead of a working Summary button for a free reader', async () => {
+    stubFetch(userWith(FREE_PLAN));
+    await rewriteSomething();
+    expect(screen.queryByRole('button', { name: 'Summary' })).not.toBeInTheDocument();
+  });
+
+  it('does not offer Summary at all for an anonymous reader', async () => {
+    stubFetch(null);
+    await rewriteSomething();
+    expect(screen.queryByRole('button', { name: 'Summary' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/AI summaries are part of Unwind Words Pro/)).not.toBeInTheDocument();
+  });
+
+  it('lets a Pro reader generate and see a labelled AI summary', async () => {
+    stubFetch(userWith(PRO_PLAN));
+    const user = await rewriteSomething();
+    await user.click(await screen.findByRole('button', { name: 'Summary' }));
+    expect(await screen.findByText('The clock struck noon.')).toBeInTheDocument();
+    expect(screen.getByText(/AI summary — read the text for the details/)).toBeInTheDocument();
+  });
+});
+
+describe('Read anything — define a selected word (v0.6)', () => {
+  beforeEach(() => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        const method = init?.method ?? 'GET';
+        if (url === '/api/me' && method === 'GET') return reply(401, { error: 'Please sign in.' });
+        if (url === '/api/rewrite' && method === 'POST') return reply(200, REWRITE_RESULT);
+        if (url.startsWith('/api/define')) {
+          return reply(200, {
+            word: 'clock', phonetic: '/klɒk/',
+            meanings: [{ pos: 'noun', definition: 'A device that measures and shows time.', example: null }],
+            audio_url: null,
+          });
+        }
+        return reply(404, { error: `unexpected ${method} ${url}` });
+      }),
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('shows a Define chip when a single word is selected, and shows the definition on click', async () => {
+    const user = userEvent.setup();
+    // jsdom implements no layout at all, so Range has no getBoundingClientRect of its own; give
+    // it a plausible on-screen size so the component doesn't treat the selection as empty.
+    Range.prototype.getBoundingClientRect = () =>
+      ({ top: 100, bottom: 120, left: 40, right: 80, width: 40, height: 20, x: 40, y: 100, toJSON: () => ({}) }) as DOMRect;
+
+    render(
+      <MemoryRouter initialEntries={['/read']} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <MeProvider>
+          <ReadAnything />
+        </MeProvider>
+      </MemoryRouter>,
+    );
+    const textarea = await screen.findByLabelText('Paste anything: an email, an article, a chapter');
+    await user.type(textarea, 'The clock struck noon.');
+    await user.click(screen.getByRole('button', { name: 'Rewrite it' }));
+    await screen.findByText(/sentences changed/);
+
+    const wordButton = await screen.findByRole('button', { name: /^clock/ });
+    const textNode = wordButton.firstChild as Text;
+    const range = document.createRange();
+    range.setStart(textNode, 0);
+    range.setEnd(textNode, textNode.length);
+    const selection = window.getSelection()!;
+    act(() => {
+      selection.removeAllRanges();
+      selection.addRange(range);
+      document.dispatchEvent(new Event('selectionchange'));
+    });
+
+    const chip = await screen.findByRole('button', { name: 'Define “clock”' });
+    await user.click(chip);
+
+    expect(await screen.findByText('A device that measures and shows time.')).toBeInTheDocument();
+    expect(screen.getByText('/klɒk/')).toBeInTheDocument();
   });
 });

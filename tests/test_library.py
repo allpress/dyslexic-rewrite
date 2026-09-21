@@ -152,6 +152,81 @@ def read_chapters_from_text(tmp_path, text):
 
 
 # =========================================================================================
+# PDF / DOCX import (v0.6, Helperbird parity)
+# =========================================================================================
+def _write_sample_pdf(path, pages: list[str]) -> None:
+    pypdf = pytest.importorskip("pypdf")
+    from reportlab.pdfgen import canvas  # generates real text content, unlike a hand-built PDF
+
+    writer = pypdf.PdfWriter()
+    tmp = path.with_suffix(".src.pdf")
+    c = canvas.Canvas(str(tmp))
+    for page_text in pages:
+        c.drawString(72, 700, page_text)
+        c.showPage()
+    c.save()
+    reader = pypdf.PdfReader(str(tmp))
+    for page in reader.pages:
+        writer.add_page(page)
+    with open(path, "wb") as f:
+        writer.write(f)
+
+
+def test_read_chapters_pdf_with_text(tmp_path):
+    pytest.importorskip("reportlab")
+    path = tmp_path / "sample.pdf"
+    _write_sample_pdf(path, ["The wind blew hard across the moor that night."])
+    chapters = read_chapters(path)
+    assert len(chapters) == 1
+    assert "wind blew hard" in chapters[0]["text"]
+
+
+def test_read_chapters_pdf_scan_with_no_text_raises_clear_error(tmp_path):
+    pypdf = pytest.importorskip("pypdf")
+    writer = pypdf.PdfWriter()
+    writer.add_blank_page(width=200, height=200)  # no text layer at all -- a stand-in for a scan
+    path = tmp_path / "scan.pdf"
+    with open(path, "wb") as f:
+        writer.write(f)
+    with pytest.raises(ValueError, match="scan"):
+        read_chapters(path)
+
+
+def _write_sample_docx(path, sections: list[tuple[str, str]]) -> None:
+    docx = pytest.importorskip("docx")
+    document = docx.Document()
+    for title, body in sections:
+        document.add_heading(title, level=1)
+        document.add_paragraph(body)
+    document.save(str(path))
+
+
+def test_read_chapters_docx_splits_on_headings(tmp_path):
+    path = tmp_path / "sample.docx"
+    _write_sample_docx(path, [
+        ("Chapter One", "The wind blew hard across the moor that whole long night."),
+        ("Chapter Two", "She tried to tear the page, but a tear fell instead."),
+    ])
+    chapters = read_chapters(path)
+    assert len(chapters) == 2
+    assert chapters[0]["title"] == "Chapter One"
+    assert "wind blew hard" in chapters[0]["text"]
+    assert chapters[1]["title"] == "Chapter Two"
+    assert "tear fell" in chapters[1]["text"]
+
+
+def test_read_chapters_docx_no_headings_is_one_chapter(tmp_path):
+    docx = pytest.importorskip("docx")
+    document = docx.Document()
+    document.add_paragraph("Just some ordinary text with no heading styles at all.")
+    path = tmp_path / "plain.docx"
+    document.save(str(path))
+    chapters = read_chapters(path)
+    assert len(chapters) == 1
+    assert "ordinary text" in chapters[0]["text"]
+
+
+# =========================================================================================
 # Server: /api/books flow
 # =========================================================================================
 pytest.importorskip("fastapi")

@@ -5,16 +5,21 @@ import ReadAloudButton from '../components/ReadAloudButton';
 import PhoneticModeSelect from '../components/PhoneticModeSelect';
 import SamplePicker from '../components/SamplePicker';
 import ReaderSettingsPanel from '../components/reader/ReaderSettingsPanel';
+import DefineChip from '../components/DefineChip';
+import SummaryPanel from '../components/SummaryPanel';
 import {
   ApiError,
   getSample,
+  importUrl,
   patchMe,
   postFeedback,
   rewrite,
+  summariseText,
   type PhoneticMapMode,
   type RewriteResponse,
 } from '../api';
 import { useMe } from '../useMe';
+import { getSpeechRecognitionCtor, speechRecognitionSupported, type SpeechRecognitionLike } from '../lib/dictation';
 
 /** Attribution shown under a sample passage instead of the paste-your-own flow. */
 interface SampleAttribution {
@@ -54,6 +59,9 @@ export default function ReadAnything() {
 
   const [text, setText] = useState('');
   const [result, setResult] = useState<RewriteResponse | null>(null);
+  // Bumped on every new result so <SummaryPanel key={resultVersion}> remounts instead of
+  // showing a stale summary of whatever was read before.
+  const [resultVersion, setResultVersion] = useState(0);
   const [showMarks, setShowMarks] = useState(true); // on by default here
   const [showOriginalInline, setShowOriginalInline] = useState(false);
   const [tripped, setTripped] = useState<Map<string, string>>(new Map());
@@ -65,6 +73,75 @@ export default function ReadAnything() {
   const [sample, setSample] = useState<SampleAttribution | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const loadedSampleParam = useRef<string | null>(null);
+  const readerContainerRef = useRef<HTMLDivElement>(null);
+
+  // "From a web page" (v0.6): a URL field beside the paste box that imports an article's text
+  // straight into it -- the reader still hits Rewrite themselves once it's filled in.
+  const [pasteTab, setPasteTab] = useState<'paste' | 'url'>('paste');
+  const [importUrlValue, setImportUrlValue] = useState('');
+  const [importing, setImporting] = useState(false);
+  const [importNote, setImportNote] = useState<string | null>(null);
+
+  async function submitImportUrl(e: FormEvent) {
+    e.preventDefault();
+    if (!importUrlValue.trim()) return;
+    setImporting(true);
+    setError(null);
+    setImportNote(null);
+    try {
+      const res = await importUrl(importUrlValue.trim());
+      setText(res.text.slice(0, MAX_CHARS));
+      setImportNote(res.note);
+      setPasteTab('paste');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'We could not import that page.');
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  // Dictation (v0.6): free, in-browser speech-to-text into the paste box. Hidden entirely when
+  // the browser has neither vendor's SpeechRecognition implementation.
+  const [dictating, setDictating] = useState(false);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const dictationBaseRef = useRef('');
+
+  useEffect(() => () => recognitionRef.current?.stop(), []);
+
+  function startDictation() {
+    const Ctor = getSpeechRecognitionCtor();
+    if (!Ctor) return;
+    const recognition = new Ctor();
+    recognition.lang = 'en-US';
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    dictationBaseRef.current = text;
+    recognition.onresult = (event) => {
+      let finalPiece = '';
+      let interim = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const piece = event.results[i][0].transcript;
+        if (event.results[i].isFinal) finalPiece += piece;
+        else interim += piece;
+      }
+      if (finalPiece) {
+        dictationBaseRef.current = `${dictationBaseRef.current} ${finalPiece}`.trim();
+      }
+      const combined = interim ? `${dictationBaseRef.current} ${interim}` : dictationBaseRef.current;
+      setText(combined.slice(0, MAX_CHARS));
+    };
+    recognition.onerror = () => setDictating(false);
+    recognition.onend = () => setDictating(false);
+    recognition.start();
+    recognitionRef.current = recognition;
+    setDictating(true);
+  }
+
+  function stopDictation() {
+    recognitionRef.current?.stop();
+    recognitionRef.current = null;
+    setDictating(false);
+  }
 
   async function loadSample(slug: string) {
     setBusy(true);
@@ -74,6 +151,7 @@ export default function ReadAnything() {
     try {
       const res = await getSample(slug);
       setResult(res);
+      setResultVersion((v) => v + 1);
       setSample({ title: res.title, author: res.author, year: res.year, chapter: res.chapter, source: res.source });
       setTripped(new Map());
       setSearchParams({ sample: slug }, { replace: true });
@@ -103,6 +181,7 @@ export default function ReadAnything() {
     try {
       const res = await rewrite(text);
       setResult(res);
+      setResultVersion((v) => v + 1);
       setSample(null);
       setTripped(new Map());
     } catch (err) {
@@ -188,15 +267,27 @@ export default function ReadAnything() {
           {Math.round(s.load_after)}.
         </p>
 
-        <Reader
-          segments={result.segments}
-          showMarks={showMarks}
-          showOriginalInline={showOriginalInline}
-          tripped={new Set(tripped.keys())}
-          onToggleWord={toggleWord}
-          phoneticMap={result.phonetic_map}
-          phoneticMapMode={phoneticMapMode}
-        />
+        <div ref={readerContainerRef}>
+          <Reader
+            segments={result.segments}
+            showMarks={showMarks}
+            showOriginalInline={showOriginalInline}
+            tripped={new Set(tripped.keys())}
+            onToggleWord={toggleWord}
+            phoneticMap={result.phonetic_map}
+            phoneticMapMode={phoneticMapMode}
+          />
+        </div>
+        {/* Select any single word above (including a marked one) to define it -- v0.6. */}
+        <DefineChip containerRef={readerContainerRef} />
+
+        {user?.plan.pro && (
+          <SummaryPanel
+            key={resultVersion}
+            isPro={user.plan.pro}
+            fetchSummary={() => summariseText(paragraphTexts(result.segments).join('\n\n'))}
+          />
+        )}
 
         {sample && (
           <p className="muted sample-attribution">
@@ -243,6 +334,37 @@ export default function ReadAnything() {
         </p>
       )}
 
+      <div className="paste-tabs" role="tablist" aria-label="How to bring in text">
+        <button type="button" role="tab" aria-selected={pasteTab === 'paste'} onClick={() => setPasteTab('paste')}>
+          Paste text
+        </button>
+        <button type="button" role="tab" aria-selected={pasteTab === 'url'} onClick={() => setPasteTab('url')}>
+          From a web page
+        </button>
+      </div>
+
+      {pasteTab === 'url' && (
+        <form onSubmit={submitImportUrl} className="stack">
+          <div className="import-url-row">
+            <label className="sr-only" htmlFor="import-url">
+              Web page address
+            </label>
+            <input
+              id="import-url"
+              type="url"
+              value={importUrlValue}
+              onChange={(e) => setImportUrlValue(e.target.value)}
+              placeholder="https://example.com/an-article"
+              required
+            />
+            <button className="btn" type="submit" disabled={importing || !importUrlValue.trim()}>
+              {importing ? 'Importing…' : 'Import'}
+            </button>
+          </div>
+          <p className="muted">We fetch the page on our server and pull out just the article text.</p>
+        </form>
+      )}
+
       <form onSubmit={submit} className="stack">
         <div>
           <label htmlFor="text">Paste anything: an email, an article, a chapter</label>
@@ -257,6 +379,7 @@ export default function ReadAnything() {
           <p className="muted">
             {text.length} of {MAX_CHARS} characters. We never store what you paste.
           </p>
+          {importNote && <p className="notice">{importNote}</p>}
         </div>
         <div className="btn-row">
           <button className="btn btn--wide" type="submit" disabled={busy || !text.trim()}>
@@ -270,7 +393,20 @@ export default function ReadAnything() {
           >
             Show me an example
           </button>
+          {speechRecognitionSupported() && (
+            <button
+              className="btn btn--plain btn--small dictation-btn"
+              type="button"
+              aria-pressed={dictating}
+              onClick={() => (dictating ? stopDictation() : startDictation())}
+            >
+              {dictating ? '⏹ Stop dictating' : '🎤 Dictate'}
+            </button>
+          )}
         </div>
+        {speechRecognitionSupported() && (
+          <p className="muted">Dictate speaks your words straight into the box; works best in a quiet room.</p>
+        )}
       </form>
 
       {showPicker && (
