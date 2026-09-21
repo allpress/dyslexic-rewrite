@@ -78,6 +78,21 @@ class ReaderProfile:
         "background": "#fbf8f1",
         "text": "#1f2328",
         "highlight_changes": True,
+        # ---- Reading settings (web reader "Aa" panel; see server/service.py's
+        # LAYOUT_RANGES/LAYOUT_CHOICES for the values each key accepts). Offered as comfort
+        # settings, never as a claim -- see docs/RESEARCH.md §2.
+        "font_family": "system",  # system | atkinson | lexend | opendyslexic | mono
+        "text_align": "left",     # left | justify
+        "theme": "light",         # light | dark | sepia | high_contrast | tint
+        "tint_color": "#fef3e2",
+        "ruler_enabled": False,
+        "ruler_height_px": 56,
+        "ruler_dim": 0.55,
+        "spotlight_enabled": False,
+        "autoscroll_speed": 0,    # 0 = off, 1-5 lines/second
+        "tts_voice": "",          # a SpeechSynthesisVoice.voiceURI, "" = let the browser pick
+        "tts_rate": 1.0,
+        "tts_pitch": 1.0,
     })
 
     style: StyleTargets = field(default_factory=StyleTargets)

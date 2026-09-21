@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import Reader, { paragraphTexts } from '../components/Reader';
 import ReadAloudButton from '../components/ReadAloudButton';
 import PhoneticModeSelect from '../components/PhoneticModeSelect';
+import ReaderSettingsPanel from '../components/reader/ReaderSettingsPanel';
 import { ApiError, getBook, getBookChapter, patchMe, type Book, type BookChapterResponse, type PhoneticMapMode } from '../api';
 import { useMe } from '../useMe';
 
@@ -149,6 +150,7 @@ export default function BookReader() {
             </select>
             <PhoneticModeSelect value={phoneticMapMode} onChange={(m) => void changePhoneticMode(m)} />
             <ReadAloudButton paragraphs={paragraphTexts(data.segments)} />
+            <ReaderSettingsPanel stats={{ segments: data.segments }} />
             <span className="reader-toolbar__spacer" />
             <button
               className="btn btn--plain btn--small"

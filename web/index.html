@@ -10,6 +10,11 @@
       content="Books and articles rewritten so you can actually read them — trigger words defused, sentences straightened, hard words respelled, tuned to how you read. Free to try. Open source."
     />
     <title>Unwind Words — text that stops fighting your brain</title>
+    <!-- Reading settings ("Aa" panel) can load Atkinson Hyperlegible / Lexend from Google Fonts
+         on demand (never up front); preconnecting just makes that first load faster. See
+         web/public/fonts/LICENSES.md and web/src/lib/fonts.ts. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Unwind Words" />
     <meta property="og:title" content="Unwind Words — text that stops fighting your brain" />

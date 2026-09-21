@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import Reader, { paragraphTexts } from '../components/Reader';
 import ReadAloudButton from '../components/ReadAloudButton';
 import PhoneticModeSelect from '../components/PhoneticModeSelect';
+import ReaderSettingsPanel from '../components/reader/ReaderSettingsPanel';
 import {
   ApiError,
   createTest,
@@ -266,6 +267,7 @@ export default function TestPage() {
             Passage {index + 1} of {test.items.length}
           </span>
           <span className="reader-toolbar__spacer" />
+          <ReaderSettingsPanel stats={{ segments: item.segments, wpm: results.find((r) => r)?.wpm }} />
           <PhoneticModeSelect value={phoneticMapMode} onChange={(m) => void changePhoneticMode(m)} />
           <ReadAloudButton
             paragraphs={paragraphTexts(item.segments)}

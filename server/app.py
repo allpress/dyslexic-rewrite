@@ -263,6 +263,23 @@ def me_triggers(body: TriggersIn, u: dict = Depends(current_user)):
     return {"profile": service.profile_summary(p, u["base_profile"])}
 
 
+@app.get("/api/me/layout")
+def get_layout(u: dict = Depends(current_user)):
+    """The reader's saved "Aa" panel settings -- comfort settings only (docs/RESEARCH.md §2),
+    never inputs to the rewrite engine. Available even for a reader with no personal profile
+    yet (see `service.get_profile`'s built-in fallback)."""
+    p, _ = service.get_profile(u["id"], u["base_profile"])
+    return {"layout": p.layout}
+
+
+@app.put("/api/me/layout")
+def put_layout(body: dict[str, Any], u: dict = Depends(current_user)):
+    p, style = service.get_profile(u["id"], u["base_profile"])
+    p.layout = service.sanitize_layout(p.layout, body)
+    service.save_profile(u["id"], p, style)
+    return {"layout": p.layout}
+
+
 @app.delete("/api/me")
 def delete_me(response: Response, u: dict = Depends(current_user)):
     library.delete_user_books(u["id"])  # files first: the row (and its keys) is about to go

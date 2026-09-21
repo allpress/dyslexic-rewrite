@@ -14,6 +14,7 @@ import {
   type PhoneticMapMode,
 } from '../api';
 import PhoneticModeSelect from '../components/PhoneticModeSelect';
+import ReaderSettingsPanel from '../components/reader/ReaderSettingsPanel';
 import { useMe } from '../useMe';
 
 const PROFILE_LABELS: Record<BaseProfile, string> = {
@@ -266,6 +267,11 @@ export default function Profile() {
           or hover a word, and always keeps the trickiest words marked all the time.
         </p>
         <PhoneticModeSelect value={user.phonetic_map} onChange={(m) => void changePhoneticMode(m)} disabled={busy} />
+      </section>
+
+      <section className="stack" aria-labelledby="reading-settings-heading">
+        <h2 id="reading-settings-heading">Reading settings</h2>
+        <ReaderSettingsPanel variant="profile" />
       </section>
 
       <section className="stack" aria-labelledby="trig-heading">

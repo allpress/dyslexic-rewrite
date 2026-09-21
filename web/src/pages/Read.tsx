@@ -4,6 +4,7 @@ import Reader, { paragraphTexts } from '../components/Reader';
 import ReadAloudButton from '../components/ReadAloudButton';
 import PhoneticModeSelect from '../components/PhoneticModeSelect';
 import SamplePicker from '../components/SamplePicker';
+import ReaderSettingsPanel from '../components/reader/ReaderSettingsPanel';
 import {
   ApiError,
   getSample,
@@ -175,6 +176,7 @@ export default function ReadAnything() {
           <PhoneticModeSelect value={phoneticMapMode} onChange={(m) => void changePhoneticMode(m)} />
           <ReadAloudButton paragraphs={paragraphTexts(result.segments)} />
           <span className="reader-toolbar__spacer" />
+          <ReaderSettingsPanel stats={{ segments: result.segments, sentences: s.sentences, loadBefore: s.load_before, loadAfter: s.load_after }} />
           <button className="btn btn--plain btn--small" type="button" onClick={pasteSomethingElse}>
             Paste something else
           </button>

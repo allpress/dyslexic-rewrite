@@ -788,3 +788,44 @@ export interface MyFeedbackItem {
 
 /** GET /api/feedback/mine — the signed-in reader's own submissions, newest first. */
 export const getMyFeedback = () => request<MyFeedbackItem[]>('/feedback/mine');
+
+/* ------------------------------------------------------ reading settings ("Aa" panel) */
+// See server/API.md, "layout". Comfort settings only (fonts/colours/spacing/ruler/spotlight/
+// auto-scroll/TTS voice) — never a claim about what helps, per docs/RESEARCH.md §2. A signed-in
+// reader's settings live on their profile via these two calls; a signed-out reader keeps them in
+// `localStorage` instead (see `lib/readerPrefs.ts`), so these are never called anonymously.
+
+export type ReaderFontFamily = 'system' | 'atkinson' | 'lexend' | 'opendyslexic' | 'mono';
+export type ReaderTextAlign = 'left' | 'justify';
+export type ReaderTheme = 'light' | 'dark' | 'sepia' | 'high_contrast' | 'tint';
+
+/** `ReaderProfile.layout`'s reading-settings keys (server/service.py's LAYOUT_RANGES/LAYOUT_CHOICES
+ * lists the bounds each one accepts). The profile blob has other, non-web keys too (e.g. the
+ * EPUB export's `background`/`text`), so this is a subset, not the whole `layout` object. */
+export interface ReaderLayout {
+  font_family: ReaderFontFamily;
+  font_size_px: number;
+  line_height: number;
+  letter_spacing_em: number;
+  word_spacing_em: number;
+  max_line_chars: number;
+  paragraph_gap_em: number;
+  text_align: ReaderTextAlign;
+  theme: ReaderTheme;
+  tint_color: string;
+  ruler_enabled: boolean;
+  ruler_height_px: number;
+  ruler_dim: number;
+  spotlight_enabled: boolean;
+  autoscroll_speed: number;
+  tts_voice: string;
+  tts_rate: number;
+  tts_pitch: number;
+}
+
+/** GET /api/me/layout — works even for a reader with no personal profile saved yet. */
+export const getLayout = () => request<{ layout: Partial<ReaderLayout> }>('/me/layout');
+
+/** PUT /api/me/layout — any subset of ReaderLayout's keys; the server merges and validates. */
+export const putLayout = (patch: Partial<ReaderLayout>) =>
+  request<{ layout: Partial<ReaderLayout> }>('/me/layout', { method: 'PUT', body: JSON.stringify(patch) });

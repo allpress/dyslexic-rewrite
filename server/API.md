@@ -37,11 +37,23 @@ and lives directly on the user row, the same way `base_profile` does.
 | PATCH | `/api/me` | `{name?, base_profile?, onboarded?, phonetic_map?, kindle_email?}` | `{user}` |
 | POST | `/api/me/writing-sample` | `{text}` (>= 150 words) | `{style: StyleReport, profile: ProfileSummary}` |
 | POST | `/api/me/triggers` | `{add?: [word], remove?: [word], safe?: [word]}` | `{profile: ProfileSummary}` |
+| GET | `/api/me/layout` | — | `{layout}` (available even with no personal profile yet, via the built-in fallback) |
+| PUT | `/api/me/layout` | any subset of `layout`'s keys | `{layout}` (merged; a recognised key with a bad value is a 400) |
 | DELETE | `/api/me` | — | `{ok: true}` |
 
 `ProfileSummary` = `{name, base_profile, max_sentence_words, min_zipf, trigger_words: [..], safe_words: [..], vocabulary_size, style: {median_sentence_words, p75_sentence_words, passive_rate, clause_depth, median_zipf, sample_words}}`
 
 `StyleReport` = the JSON of `dyslexic_rewrite.learn.StyleReport` (all numeric rates + small word-count maps).
+
+`layout` (`ReaderProfile.layout`, see `src/dyslexic_rewrite/profile.py`) is the web reader's "Aa"
+settings panel: font, size, spacing, paragraph width, theme, reading ruler, spotlight,
+auto-scroll and text-to-speech voice/rate/pitch. These are comfort settings only -- offered with
+one neutral sentence in the panel, never as a claim (docs/RESEARCH.md §2 says dyslexia-specific
+fonts have no evidence and coloured overlays are placebo) -- and are excluded from the rewrite
+cache's fingerprint (`server/cache.py`) because they never change what a rewrite says, only how
+the page looks. `server/service.py`'s `LAYOUT_RANGES`/`LAYOUT_CHOICES` list every key `PUT
+/api/me/layout` accepts and the bounds it enforces; an anonymous (signed-out) reader keeps the
+same settings in `localStorage` instead, under the `web/src/lib/readerPrefs.ts` schema.
 
 ## Passages
 

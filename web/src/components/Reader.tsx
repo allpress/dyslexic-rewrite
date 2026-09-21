@@ -1,6 +1,24 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from 'react';
 import type { PhoneticMapEntry, PhoneticMapMode, Segment } from '../api';
-import { speak } from '../lib/speech';
+import { speak, speakBlocks, type SpeakBlocksHandle } from '../lib/speech';
+import { FONT_STACKS } from '../lib/fonts';
+import {
+  prefersReducedMotion,
+  readerCssVars,
+  readerPrefsStore,
+  ttsModeStore,
+  useReaderPrefs,
+  useTtsMode,
+} from '../lib/readerPrefs';
 
 /** Strip surrounding punctuation and case so "Clock," and "clock" count as one word. */
 export function cleanWord(raw: string): string {
@@ -59,6 +77,37 @@ export function paragraphTexts(segments: Segment[]): string[] {
       : block.parts.map((p) => (p.seg.t === 'text' || p.seg.t === 'change' || p.seg.t === 'note' ? p.seg.s : ''))
           .join(''),
   );
+}
+
+interface WordSpan {
+  /** Same `${segIndex}:${chunkIndex}` scheme as each word button's own `id` below, so a
+   * text-to-speech char offset can be turned straight into "which word button is this". */
+  id: string;
+  start: number;
+  end: number;
+}
+
+/**
+ * Per block (paragraph/heading), the character range each word occupies in that block's own
+ * plain text (i.e. `paragraphTexts(segments)[blockIndex]`) — read-aloud's `onboundary` events
+ * report offsets into exactly that text, one utterance per block. Headings get `[]`: they render
+ * as plain text with no per-word buttons to highlight.
+ */
+export function blockWordSpans(blocks: Block[]): WordSpan[][] {
+  return blocks.map((block) => {
+    if (block.kind === 'heading') return [];
+    const spans: WordSpan[] = [];
+    let pos = 0;
+    block.parts.forEach(({ seg, segIndex }) => {
+      const raw = seg.t === 'text' || seg.t === 'change' || seg.t === 'note' ? seg.s : '';
+      raw.split(/(\s+)/).forEach((chunk, i) => {
+        if (chunk === '') return;
+        if (!/^\s+$/.test(chunk)) spans.push({ id: `${segIndex}:${i}`, start: pos, end: pos + chunk.length });
+        pos += chunk.length;
+      });
+    });
+    return spans;
+  });
 }
 
 interface SegmentSpan {
@@ -158,6 +207,173 @@ export default function Reader({
   );
 
   const blocks = toBlocks(segments);
+  const blockTexts = useMemo(() => paragraphTexts(segments), [segments]);
+  const wordSpans = useMemo(() => blockWordSpans(blocks), [blocks]);
+
+  /* ------------------------------------------------------------ reading settings ("Aa" panel)
+   * Comfort settings only (docs/RESEARCH.md §2) -- font, spacing, theme, reading ruler,
+   * spotlight, auto-scroll and text-to-speech. Read from the shared store `ReaderSettingsPanel`
+   * (mounted elsewhere on the page) writes to, so this component re-renders live as the reader
+   * adjusts anything. See lib/readerPrefs.ts and lib/speech.ts. */
+  const prefs = useReaderPrefs();
+  const ttsMode = useTtsMode();
+  const reducedMotion = prefersReducedMotion();
+
+  const cssVars = readerCssVars(prefs, FONT_STACKS[prefs.font_family]) as unknown as CSSProperties;
+
+  // ---- reading ruler: a dimmed page with a lit band that follows the pointer/finger/arrows.
+  const [rulerY, setRulerY] = useState<number | null>(null);
+  const handleRulerMove = useCallback(
+    (clientY: number) => {
+      if (!prefs.ruler_enabled || !wrapRef.current) return;
+      const box = wrapRef.current.getBoundingClientRect();
+      setRulerY(Math.max(0, Math.min(clientY - box.top, box.height)));
+    },
+    [prefs.ruler_enabled],
+  );
+  // Give the ruler a starting position as soon as it's turned on, rather than waiting for the
+  // first pointer move (or never appearing at all on a keyboard-only toggle via "R").
+  useEffect(() => {
+    if (!prefs.ruler_enabled) {
+      setRulerY(null);
+    } else if (rulerY === null && wrapRef.current) {
+      setRulerY(wrapRef.current.getBoundingClientRect().height / 2);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefs.ruler_enabled]);
+
+  // ---- spotlight: dims every paragraph but the current one; ↑/↓ or a click move it.
+  const [spotlightIndex, setSpotlightIndex] = useState(0);
+  useEffect(() => {
+    if (spotlightIndex > blocks.length - 1) setSpotlightIndex(Math.max(0, blocks.length - 1));
+  }, [blocks.length, spotlightIndex]);
+
+  // ---- text-to-speech: per-word highlighting when the browser's onboundary gives word offsets,
+  // a whole-paragraph fallback (via onBlockStart) when it never does (e.g. some Safari voices).
+  const [speakingBlock, setSpeakingBlock] = useState<number | null>(null);
+  const [speakingIds, setSpeakingIds] = useState<ReadonlySet<string>>(new Set());
+  const [ttsPlaying, setTtsPlaying] = useState(false);
+  const speechRef = useRef<SpeakBlocksHandle | null>(null);
+  const pausedRef = useRef(false);
+
+  const stopReading = useCallback(() => {
+    speechRef.current?.stop();
+    speechRef.current = null;
+    pausedRef.current = false;
+    setTtsPlaying(false);
+    setSpeakingBlock(null);
+    setSpeakingIds(new Set());
+  }, []);
+
+  const startReadingFrom = useCallback(
+    (blockIndex: number) => {
+      speechRef.current?.stop();
+      pausedRef.current = false;
+      setTtsPlaying(true);
+      speechRef.current = speakBlocks(blockTexts, blockIndex, {
+        rate: prefs.tts_rate,
+        pitch: prefs.tts_pitch,
+        voiceURI: prefs.tts_voice || null,
+        onBlockStart: (i) => {
+          setSpeakingBlock(i);
+          // Whole-block fallback highlight, replaced by a single word as soon as (if) a real
+          // word boundary arrives for this block.
+          setSpeakingIds(new Set((wordSpans[i] ?? []).map((w) => w.id)));
+        },
+        onBoundary: (i, boundary) => {
+          const spans = wordSpans[i] ?? [];
+          if (boundary.isWord) {
+            const hit = spans.find((s) => boundary.charIndex >= s.start && boundary.charIndex < s.end);
+            if (hit) setSpeakingIds(new Set([hit.id]));
+            return;
+          }
+          // Sentence-level (or unnamed, non-word) boundary: highlight every word it spans.
+          const end = boundary.charIndex + Math.max(boundary.charLength, 1);
+          const ids = spans.filter((s) => s.start < end && s.end > boundary.charIndex).map((s) => s.id);
+          if (ids.length) setSpeakingIds(new Set(ids));
+        },
+        onDone: stopReading,
+      });
+    },
+    [blockTexts, wordSpans, prefs.tts_rate, prefs.tts_pitch, prefs.tts_voice, stopReading],
+  );
+
+  const toggleReadingPlayPause = useCallback(() => {
+    if (!speechRef.current) {
+      startReadingFrom(0);
+      return;
+    }
+    if (pausedRef.current) {
+      speechRef.current.resume();
+      pausedRef.current = false;
+      setTtsPlaying(true);
+    } else {
+      speechRef.current.pause();
+      pausedRef.current = true;
+      setTtsPlaying(false);
+    }
+  }, [startReadingFrom]);
+
+  // Never keep talking after the passage changes or this reader unmounts.
+  useEffect(() => stopReading, [segments, stopReading]);
+
+  // ---- auto-scroll: 1-5 lines/second, paused on hover/tap, skipped under reduced motion.
+  const [autoscrollPaused, setAutoscrollPaused] = useState(false);
+  useEffect(() => {
+    if (prefs.autoscroll_speed <= 0 || reducedMotion || autoscrollPaused) return;
+    const pxPerSecond = prefs.autoscroll_speed * prefs.font_size_px * prefs.line_height;
+    let raf = 0;
+    let last = performance.now();
+    let carry = 0;
+    const step = (now: number) => {
+      const dt = (now - last) / 1000;
+      last = now;
+      carry += pxPerSecond * dt;
+      if (carry >= 1) {
+        window.scrollBy(0, Math.floor(carry));
+        carry -= Math.floor(carry);
+      }
+      raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [prefs.autoscroll_speed, prefs.font_size_px, prefs.line_height, reducedMotion, autoscrollPaused]);
+
+  // ---- keyboard: R toggles the ruler, S toggles spotlight, ↑/↓ move whichever is on, Space
+  // plays/pauses read-aloud once TTS mode is turned on in the settings panel. Ignored while
+  // typing anywhere else on the page.
+  useEffect(() => {
+    function isTypingTarget(target: EventTarget | null): boolean {
+      const el = target as HTMLElement | null;
+      if (!el) return false;
+      return el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable;
+    }
+    function onKeyDown(e: KeyboardEvent) {
+      if (isTypingTarget(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === 'r' || e.key === 'R') {
+        readerPrefsStore.set({ ruler_enabled: !readerPrefsStore.get().ruler_enabled });
+      } else if (e.key === 's' || e.key === 'S') {
+        readerPrefsStore.set({ spotlight_enabled: !readerPrefsStore.get().spotlight_enabled });
+      } else if (e.key === 'ArrowDown') {
+        if (readerPrefsStore.get().spotlight_enabled) {
+          e.preventDefault();
+          setSpotlightIndex((v) => Math.min(v + 1, Math.max(0, blocks.length - 1)));
+        }
+        if (readerPrefsStore.get().ruler_enabled) setRulerY((v) => (v ?? 0) + 24);
+      } else if (e.key === 'ArrowUp') {
+        if (readerPrefsStore.get().spotlight_enabled) {
+          e.preventDefault();
+          setSpotlightIndex((v) => Math.max(v - 1, 0));
+        }
+        if (readerPrefsStore.get().ruler_enabled) setRulerY((v) => Math.max((v ?? 0) - 24, 0));
+      } else if (e.key === ' ' && ttsModeStore.get()) {
+        e.preventDefault();
+        toggleReadingPlayPause();
+      }
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [blocks.length, toggleReadingPlayPause]);
 
   // Phonetic-map entries, grouped by segment and re-based to offsets local to that segment's `s`.
   const entriesBySegment = useMemo(() => {
@@ -279,6 +495,7 @@ export default function Reader({
             'word',
             isTripped ? 'word--tripped' : '',
             marked && showMarks ? `word--${marked}` : '',
+            speakingIds.has(id) ? 'word--speaking' : '',
           ]
             .filter(Boolean)
             .join(' ')}
@@ -313,19 +530,74 @@ export default function Reader({
     'reader__text',
     showMarks ? 'marks' : '',
     phoneticMapMode === 'always' ? 'reader__text--always' : '',
+    prefs.ruler_enabled ? 'reader--ruler-on' : '',
+    prefs.spotlight_enabled ? 'reader--spotlight-on' : '',
+    reducedMotion ? 'reader--reduced-motion' : '',
   ]
     .filter(Boolean)
     .join(' ');
 
   return (
-    <div className={className} style={{ position: 'relative' }} ref={wrapRef}>
-      {blocks.map((block, i) =>
-        block.kind === 'heading' ? (
-          <h2 key={`b${i}`}>{block.text}</h2>
-        ) : (
-          <p key={`b${i}`}>{block.parts.map((p) => renderSegment(p.seg, p.segIndex))}</p>
-        ),
+    <div
+      className={className}
+      style={{ position: 'relative', ...cssVars }}
+      ref={wrapRef}
+      data-theme={prefs.theme}
+      onMouseMove={(e) => handleRulerMove(e.clientY)}
+      onTouchMove={(e) => {
+        const t = e.touches[0];
+        if (t) handleRulerMove(t.clientY);
+      }}
+      onMouseEnter={() => setAutoscrollPaused(true)}
+      onMouseLeave={() => setAutoscrollPaused(false)}
+      onTouchStart={() => setAutoscrollPaused(true)}
+      onTouchEnd={() => setAutoscrollPaused(false)}
+    >
+      {prefs.ruler_enabled && rulerY !== null && (
+        <div
+          className="reader__ruler"
+          aria-hidden="true"
+          style={{ top: rulerY - prefs.ruler_height_px / 2, height: prefs.ruler_height_px }}
+        />
       )}
+      {blocks.map((block, i) => {
+        const dimmed = prefs.spotlight_enabled && i !== spotlightIndex;
+        const active = prefs.spotlight_enabled && i === spotlightIndex;
+        return (
+          <div
+            key={`b${i}`}
+            className={[
+              'reader__block',
+              dimmed ? 'reader__block--dim' : '',
+              active ? 'reader__block--active' : '',
+              i === speakingBlock ? 'reader__block--speaking' : '',
+            ]
+              .filter(Boolean)
+              .join(' ')}
+            onClick={() => prefs.spotlight_enabled && setSpotlightIndex(i)}
+          >
+            {ttsMode && (
+              <button
+                type="button"
+                className="reader__read-from"
+                aria-label={`Read from here${block.kind === 'heading' ? '' : `, paragraph ${i + 1}`}`}
+                aria-pressed={ttsPlaying && speakingBlock === i}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  startReadingFrom(i);
+                }}
+              >
+                <span aria-hidden="true">▶</span>
+              </button>
+            )}
+            {block.kind === 'heading' ? (
+              <h2>{block.text}</h2>
+            ) : (
+              <p>{block.parts.map((p) => renderSegment(p.seg, p.segIndex))}</p>
+            )}
+          </div>
+        );
+      })}
       {tip && (
         <div
           className="tip"

@@ -7,6 +7,7 @@ Everything that touches a reader's own words lives here so the privacy rule is e
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 from dyslexic_rewrite import analyze, load_profile, rewrite
@@ -103,6 +104,74 @@ def update_triggers(user_id: int, base: str, add=None, remove=None, safe=None) -
             p.trigger_words.remove(w)
     save_profile(user_id, p)
     return p
+
+
+# ---------------------------------------------------------------------------------------
+# reading settings ("Aa" panel) -- comfort settings only, see docs/RESEARCH.md §2. These never
+# feed the rewrite engine (server/cache.py excludes "layout" from the fingerprint), so a bad or
+# unusual value here can only ever change how the page looks, not what it says.
+# ---------------------------------------------------------------------------------------
+LAYOUT_RANGES: dict[str, tuple[float, float]] = {
+    "font_size_px": (16, 32),
+    "line_height": (1.4, 2.4),
+    "letter_spacing_em": (0.0, 0.15),
+    "word_spacing_em": (0.0, 0.5),
+    "max_line_chars": (40, 90),
+    "paragraph_gap_em": (0.0, 3.0),
+    "ruler_height_px": (24, 160),
+    "ruler_dim": (0.0, 1.0),
+    "autoscroll_speed": (0, 5),
+    "tts_rate": (0.6, 1.6),
+    "tts_pitch": (0.0, 2.0),
+}
+_LAYOUT_INT_KEYS = {"font_size_px", "max_line_chars", "ruler_height_px", "autoscroll_speed"}
+
+LAYOUT_CHOICES: dict[str, tuple[str, ...]] = {
+    "font_family": ("system", "atkinson", "lexend", "opendyslexic", "mono"),
+    "text_align": ("left", "justify"),
+    "theme": ("light", "dark", "sepia", "high_contrast", "tint"),
+}
+
+LAYOUT_BOOL_KEYS = ("ruler_enabled", "spotlight_enabled")
+
+_HEX_COLOR = re.compile(r"^#[0-9a-fA-F]{6}$")
+
+
+def sanitize_layout(current: dict[str, Any], patch: dict[str, Any]) -> dict[str, Any]:
+    """Merge a reader-supplied layout patch onto `current`, validating every recognised key.
+
+    Unknown keys are dropped rather than rejected, so older/newer clients (and the built-in
+    profiles' own `background`/`text`/`highlight_changes` keys, which this endpoint does not
+    manage) round-trip harmlessly. A recognised key with a bad value raises ValueError, which
+    `server/app.py`'s generic handler turns into a 400.
+    """
+    out = dict(current)
+    for key, value in patch.items():
+        if key in LAYOUT_RANGES:
+            lo, hi = LAYOUT_RANGES[key]
+            try:
+                num = float(value)
+            except (TypeError, ValueError):
+                raise ValueError(f"{key} must be a number") from None
+            if not (lo <= num <= hi):
+                raise ValueError(f"{key} must be between {lo} and {hi}")
+            out[key] = int(round(num)) if key in _LAYOUT_INT_KEYS else num
+        elif key in LAYOUT_CHOICES:
+            if value not in LAYOUT_CHOICES[key]:
+                raise ValueError(f"{key} must be one of {list(LAYOUT_CHOICES[key])}")
+            out[key] = value
+        elif key in LAYOUT_BOOL_KEYS:
+            out[key] = bool(value)
+        elif key == "tint_color":
+            if not isinstance(value, str) or not _HEX_COLOR.match(value):
+                raise ValueError("tint_color must be a #rrggbb colour")
+            out[key] = value
+        elif key == "tts_voice":
+            if not isinstance(value, str):
+                raise ValueError("tts_voice must be a string")
+            out[key] = value[:200]
+        # else: silently ignored -- not one of ours to validate.
+    return out
 
 
 # ---------------------------------------------------------------------------------------
