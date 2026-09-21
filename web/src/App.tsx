@@ -12,6 +12,8 @@ import ReadAnything from './pages/Read';
 import Record from './pages/Record';
 import Profile from './pages/Profile';
 import Assess from './pages/Assess';
+import Library from './pages/Library';
+import BookReader from './pages/BookReader';
 import NotFound from './pages/NotFound';
 import Pricing from './pages/Pricing';
 
@@ -80,6 +82,22 @@ export default function App() {
           }
         />
         <Route path="/pricing" element={<Pricing />} />
+        <Route
+          path="/library"
+          element={
+            <RequireAuth>
+              <Library />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/library/:id"
+          element={
+            <RequireAuth>
+              <BookReader />
+            </RequireAuth>
+          }
+        />
         <Route path="*" element={<NotFound />} />
       </Routes>
       <footer className="footer">

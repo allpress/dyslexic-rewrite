@@ -21,6 +21,10 @@ Privacy rules the server enforces:
 
 `User` = `{id, email, name, base_profile: "default"|"phonological"|"visual"|"attention", onboarded: bool, has_personal_profile: bool, phonetic_map: "off"|"on_demand"|"always", created_at, plan: PlanSummary}`
 (`plan` is billing's addition -- see "Billing (v0.5)" below for `PlanSummary`.)
+`User` = `{id, email, name, base_profile: "default"|"phonological"|"visual"|"attention", onboarded: bool, has_personal_profile: bool, phonetic_map: "off"|"on_demand"|"always", kindle_email: string|null, created_at}`
+
+`kindle_email` (v0.5, "Your library") is where `POST /api/books/{id}/kindle` emails a book's
+EPUB. Null until the reader sets it via `PATCH /api/me {kindle_email}`.
 
 `phonetic_map` is the reader's phonetic-map preference (see v0.3 below). It defaults to `on_demand`
 and lives directly on the user row, the same way `base_profile` does.
@@ -29,6 +33,8 @@ and lives directly on the user row, the same way `base_profile` does.
 | --- | --- | --- | --- |
 | GET | `/api/me` | — | `{user, profile: ProfileSummary | null, plan: PlanSummary}` (401 when signed out; `plan` is billing's addition, see "Billing (v0.5)") |
 | PATCH | `/api/me` | `{name?, base_profile?, onboarded?, phonetic_map?}` | `{user}` |
+| GET | `/api/me` | — | `{user, profile: ProfileSummary | null}` (401 when signed out) |
+| PATCH | `/api/me` | `{name?, base_profile?, onboarded?, phonetic_map?, kindle_email?}` | `{user}` |
 | POST | `/api/me/writing-sample` | `{text}` (>= 150 words) | `{style: StyleReport, profile: ProfileSummary}` |
 | POST | `/api/me/triggers` | `{add?: [word], remove?: [word], safe?: [word]}` | `{profile: ProfileSummary}` |
 | DELETE | `/api/me` | — | `{ok: true}` |
@@ -368,3 +374,68 @@ callers get the free limit).
 `server/migrations/006_billing.sql` adds `users.plan` / `users.plan_until` /
 `users.stripe_customer_id`, plus `subscriptions` (one row per Stripe subscription) and
 `billing_events` (webhook idempotency, keyed on the Stripe event id).
+# Your library (v0.5)
+
+Upload a book, get it back rewritten, read it on the site or a Kindle. All routes below require
+sign-in. Files (the original upload and the rewritten EPUB) are written to `BOOKS_DIR` (default
+`./data/books`; on Fly, `/data/books`, the same mounted volume `AUDIO_DIR` uses), one subfolder
+per user, using the same traversal-safe key pattern as voice recordings.
+
+Processing runs on a single background worker thread with a queue, started from the app's
+lifespan hook (`server/library.py`). A book left `queued`/`processing` by a restart re-queues
+itself at startup.
+
+`Book` = `{id, title, author: string|null, source_name, source_kind: "epub"|"txt"|"md", words,
+chapters, status: "queued"|"processing"|"ready"|"failed", engine: "rules"|"llm", progress,
+error: string|null, created_at, finished_at: string|null, last_opened_at: string|null,
+kindle_sent_at: string|null}`
+
+- `chapters` is the total chapter count once the upload has been read (0 only for an instant
+  before that finishes); `progress` is how many of those chapters have been rewritten so far --
+  poll `GET /api/books/{id}` (or list) roughly every 3 seconds while `status` is `queued` or
+  `processing`.
+- `engine` is `"rules"` unless the upload asked for `"llm"` *and* the reader is Pro *and* the
+  server has an LLM configured (`DYSREWRITE_LLM_BASE_URL`/`DYSREWRITE_LLM_API_KEY`) -- otherwise
+  it's silently downgraded to `"rules"`.
+
+| Method | Path | Body | Returns |
+| --- | --- | --- | --- |
+| POST | `/api/books` | multipart: `file` (.epub/.txt/.md), `title?`, `author?`, `engine?` | `Book` (201) |
+| GET | `/api/books` | -- | `[Book]`, newest first |
+| GET | `/api/books/{id}` | -- | `Book` -- poll this for status/progress |
+| GET | `/api/books/{id}/read?chapter=n` | -- | same shape as `POST /api/rewrite`, plus `{chapter, chapters, title}` -- 409 until `status == "ready"` |
+| GET | `/api/books/{id}/download` | -- | the rewritten EPUB, `Content-Disposition: attachment` -- 409 until ready |
+| POST | `/api/books/{id}/kindle` | -- | `{ok: true}` -- emails the EPUB to `users.kindle_email`; 400 if that isn't set yet |
+| POST | `/api/books/{id}/rerun` | -- | `Book` -- re-rewrites with the reader's *current* profile; **Pro only** (402 otherwise) |
+| DELETE | `/api/books/{id}` | -- | `{ok: true}` -- removes the row and its files |
+
+Rules the server enforces:
+- **Upload limits**: at most 25 MB; `.epub`/.txt`/`.md` only; at most 300,000 words for anyone,
+  and at most 60,000 words for a free reader (a longer book needs Pro). Rejections come back as
+  400 (bad file/too long outright) or 402 (fixable by upgrading).
+- **Book quota**: `billing.quota(user).books_total` -- a free reader gets exactly one book, ever;
+  a second upload is a 402 that says so. Pro is unlimited (`books_total: null`).
+- A book's chapters come from `dyslexic_rewrite.io.read_chapters` (EPUB spine order with heading
+  detection; `.txt`/`.md` split on headings or "Chapter N" lines, falling back to ~8,000-word
+  chunks of the whole file). Each chapter is rewritten with `dyslexic_rewrite.rewrite.engine.rewrite`
+  under the reader's own profile, going through the same rewrite cache as `/api/rewrite`
+  (`server/cache.py`) -- so `POST /api/books/{id}/rerun` under an unchanged profile is instant.
+- **Send to Kindle** emails the EPUB as a base64 attachment via Resend (reusing `auth.py`'s
+  client/env), from `LOGIN_FROM_EMAIL`, to `users.kindle_email`. The reader must add that sending
+  address to Amazon's **Approved Personal Document E-mail List** (on amazon.com: Manage Your
+  Content and Devices > Preferences > Personal Document Settings) or the book is silently
+  dropped -- the web app shows this instruction whenever it asks for the address. Without
+  `RESEND_API_KEY` configured (local dev), the send is a logged no-op, same spirit as
+  `DEV_CODE_FALLBACK` for sign-in codes.
+- `PATCH /api/me` gains `kindle_email?: string` (cleared with `""`); `User` gains
+  `kindle_email: string | null`.
+- `DELETE /api/me` also deletes every book row (cascade) and every book file for that user.
+
+Migration: `server/migrations/007_library.sql` adds `books (id, user_id, title, author,
+source_name, source_kind, words, chapters, status, engine, profile_fingerprint, error,
+source_key, output_key, progress, created_at, finished_at, last_opened_at, kindle_sent_at)` and
+`users.kindle_email`.
+
+Env vars: `BOOKS_DIR` (default `./data/books`), plus the LLM engine's existing
+`DYSREWRITE_LLM_BASE_URL`/`DYSREWRITE_LLM_API_KEY` (see `src/dyslexic_rewrite/rewrite/llm.py`) to
+allow Pro readers the `"llm"` engine.
