@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -41,10 +42,25 @@ from . import feedback as feedback_module  # v0.6 user feedback; aliased so it d
 from . import importer  # v0.6 import from a web page (server/API.md, "Import (v0.6)")
 from . import dictionary  # v0.6 dictionary on tap (server/API.md, "Dictionary (v0.6)")
 from . import summaries  # v0.6 AI summaries, Pro only (server/API.md, "Summaries (v0.6)")
+from . import tokens  # v0.6 personal API tokens for the "Unwind this page" browser extension
+# (see server/API.md, "API tokens (v0.6)", and server/tokens.py).
 
 app = FastAPI(title="Unwind Words", version=__version__, docs_url=None, redoc_url=None)
 SECURE_COOKIES = os.environ.get("SECURE_COOKIES", "1") == "1"
 WEB_DIST = Path(os.environ.get("WEB_DIST", Path(__file__).resolve().parent.parent / "web" / "dist"))
+
+# The browser extension calls the API from a `chrome-extension://<id>` (or `moz-extension://<id>`)
+# origin, which carries no cookie jar for unwindwords.com -- it authenticates with a personal API
+# token (see server/tokens.py) sent as `Authorization: Bearer uw_...` instead. That header only
+# reaches the API at all if CORS allows it, so every extension id is allowed to call `/api/*`
+# (no browser ever sends credentials from these origins, so this is not a cookie-forgery risk).
+app.add_middleware(
+    CORSMiddleware,
+    allow_origin_regex=r"^(chrome|moz)-extension://.*$",
+    allow_methods=["*"],
+    allow_headers=["Authorization", "Content-Type"],
+    allow_credentials=False,
+)
 
 
 from contextlib import asynccontextmanager  # noqa: E402
@@ -124,7 +140,18 @@ def _user_json(u: dict) -> dict:
             "plan": billing.plan_summary(u)}
 
 
+def _bearer_user(request: Request) -> dict | None:
+    """A personal API token (see server/tokens.py), for the browser extension calling from an
+    origin that carries no session cookie. `None` if there's no bearer header, so callers fall
+    back to the cookie exactly as before."""
+    header = request.headers.get("authorization")
+    return tokens.user_from_bearer(header) if header else None
+
+
 def current_user(request: Request) -> dict:
+    u = _bearer_user(request)
+    if u:
+        return u
     uid = auth.read_session(request.cookies.get(auth.COOKIE))
     u = _user_row(uid) if uid else None
     if not u:
@@ -133,6 +160,9 @@ def current_user(request: Request) -> dict:
 
 
 def optional_user(request: Request) -> dict | None:
+    u = _bearer_user(request)
+    if u:
+        return u
     uid = auth.read_session(request.cookies.get(auth.COOKIE))
     return _user_row(uid) if uid else None
 
@@ -843,6 +873,7 @@ app.include_router(feedback_module.router)
 app.include_router(importer.router)
 app.include_router(dictionary.router)
 app.include_router(summaries.router)
+app.include_router(tokens.router)
 
 
 # ---------------------------------------------------------------------------------------

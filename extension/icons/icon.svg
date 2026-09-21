@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <!-- Source of truth for the toolbar/action icon: a plain accent-coloured disc with a white
+       "U" mark. No wordmark, no imitation of any other product's logo. scripts/generate-icons.mjs
+       rasterizes an equivalent shape procedurally (see that file's comment for why: it draws
+       PNGs directly with pngjs rather than depending on a native SVG rasterizer). Kept here only
+       as the readable, editable source for anyone touching the design later. -->
+  <circle cx="64" cy="64" r="60" fill="#1c5d4a" />
+  <path
+    d="M 42 30 L 42 64 A 22 22 0 0 0 86 64 L 86 30"
+    fill="none"
+    stroke="#ffffff"
+    stroke-width="14"
+    stroke-linecap="round"
+  />
+</svg>

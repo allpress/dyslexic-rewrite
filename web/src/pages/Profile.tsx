@@ -2,12 +2,16 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ApiError,
+  createApiToken,
   deleteMe,
+  getApiTokens,
   getLatestBatteryRun,
   getMyFeedback,
   openPortal,
   patchMe,
   postTriggers,
+  revokeApiToken,
+  type ApiToken,
   type BaseProfile,
   type BatteryRun,
   type MyFeedbackItem,
@@ -44,6 +48,11 @@ export default function Profile() {
   const [portalBusy, setPortalBusy] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const [justUpgraded, setJustUpgraded] = useState(false);
+  const [tokens, setTokens] = useState<ApiToken[] | null>(null);
+  const [tokenBusy, setTokenBusy] = useState(false);
+  const [newTokenName, setNewTokenName] = useState('');
+  const [revealedToken, setRevealedToken] = useState<string | null>(null);
+  const [copyLabel, setCopyLabel] = useState('Copy');
 
   useEffect(() => {
     if (searchParams.get('upgraded') !== '1') return;
@@ -78,6 +87,20 @@ export default function Profile() {
       })
       .catch(() => {
         if (!cancelled) setMyFeedback([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    getApiTokens()
+      .then((items) => {
+        if (!cancelled) setTokens(items);
+      })
+      .catch(() => {
+        if (!cancelled) setTokens([]);
       });
     return () => {
       cancelled = true;
@@ -139,6 +162,50 @@ export default function Profile() {
       setError(err instanceof ApiError ? err.message : 'We could not open billing management.');
     } finally {
       setPortalBusy(false);
+    }
+  }
+
+  async function createToken() {
+    const name = newTokenName.trim();
+    if (!name) return;
+    setTokenBusy(true);
+    setError(null);
+    try {
+      const created = await createApiToken(name);
+      setTokens((prev) => [created, ...(prev ?? [])]);
+      setRevealedToken(created.token);
+      setCopyLabel('Copy');
+      setNewTokenName('');
+    } catch (err) {
+      if (err instanceof ApiError && err.isUnauthorized) return;
+      setError(err instanceof ApiError ? err.message : 'We could not create that token.');
+    } finally {
+      setTokenBusy(false);
+    }
+  }
+
+  async function revokeToken(id: string) {
+    setTokenBusy(true);
+    setError(null);
+    try {
+      await revokeApiToken(id);
+      setTokens((prev) => prev?.map((t) => (t.id === id ? { ...t, revoked_at: new Date().toISOString() } : t)) ?? null);
+    } catch (err) {
+      if (err instanceof ApiError && err.isUnauthorized) return;
+      setError(err instanceof ApiError ? err.message : 'We could not revoke that token.');
+    } finally {
+      setTokenBusy(false);
+    }
+  }
+
+  async function copyRevealedToken() {
+    if (!revealedToken) return;
+    try {
+      await navigator.clipboard.writeText(revealedToken);
+      setCopyLabel('Copied!');
+      setTimeout(() => setCopyLabel('Copy'), 2000);
+    } catch {
+      setCopyLabel('Select & copy manually');
     }
   }
 
@@ -373,6 +440,80 @@ export default function Profile() {
             ))}
           </ul>
         )}
+      </section>
+
+      <section className="stack" aria-labelledby="tokens-heading">
+        <h2 id="tokens-heading">API tokens / browser extension</h2>
+        <p className="muted">
+          Paste a token into the "Unwind this page" browser extension so it can rewrite pages
+          using your own profile and plan, without signing in from the extension itself.
+        </p>
+
+        {revealedToken && (
+          <div className="notice stack" role="status">
+            <p>
+              Here is your token — copy it now, it will not be shown again:
+            </p>
+            <div className="btn-row" style={{ alignItems: 'center' }}>
+              <code style={{ wordBreak: 'break-all' }}>{revealedToken}</code>
+            </div>
+            <div className="btn-row">
+              <button className="btn btn--small" type="button" onClick={() => void copyRevealedToken()}>
+                {copyLabel}
+              </button>
+              <button className="btn btn--small btn--plain" type="button" onClick={() => setRevealedToken(null)}>
+                Done
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="btn-row">
+          <input
+            type="text"
+            aria-label="Token name"
+            placeholder="e.g. My laptop"
+            value={newTokenName}
+            onChange={(e) => setNewTokenName(e.target.value)}
+            style={{ maxWidth: 260 }}
+            disabled={tokenBusy}
+          />
+          <button
+            className="btn btn--small"
+            type="button"
+            disabled={tokenBusy || !newTokenName.trim()}
+            onClick={() => void createToken()}
+          >
+            Create token
+          </button>
+        </div>
+
+        {tokens === null ? (
+          <p className="muted">Loading…</p>
+        ) : tokens.filter((t) => !t.revoked_at).length === 0 ? (
+          <p className="muted">No active tokens yet.</p>
+        ) : (
+          <ul className="pill-list">
+            {tokens
+              .filter((t) => !t.revoked_at)
+              .map((t) => (
+                <li className="pill" key={t.id}>
+                  <span>
+                    {t.name} — <code>uw_{t.prefix}…</code>
+                    {t.last_used_at ? ` · last used ${new Date(t.last_used_at).toLocaleDateString()}` : ' · never used'}
+                  </span>
+                  <button type="button" disabled={tokenBusy} aria-label={`Revoke ${t.name}`} onClick={() => void revokeToken(t.id)}>
+                    ✕
+                  </button>
+                </li>
+              ))}
+          </ul>
+        )}
+
+        <p className="muted">
+          Not signed in on the extension yet?{' '}
+          <Link to="/profile">Sign in to unwindwords.com</Link> and create a token here.
+        </p>
       </section>
 
       <section className="stack" aria-labelledby="danger-heading">

@@ -1418,7 +1418,6 @@ input[type='file'] {
   color: var(--trip-line);
 }
 
-/* =========================================================================   Reading settings ("Aa" panel) -- comfort settings only, see docs/RESEARCH.md §2.
 /* ================================================================================
    Reading settings ("Aa" panel) -- comfort settings only, see docs/RESEARCH.md §2.
    Every value below is a CSS custom property Reader.tsx sets on `.reader` itself

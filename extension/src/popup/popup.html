@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Unwind this page</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main class="uwp">
+      <h1 class="uwp__title">Unwind Words</h1>
+
+      <button id="unwind-btn" type="button" class="uwp-btn uwp-btn--primary uwp-btn--wide">
+        Unwind this page
+      </button>
+      <p id="unwind-status" class="uwp-muted" role="status" aria-live="polite"></p>
+
+      <details id="settings" class="uwp-settings">
+        <summary>Settings</summary>
+
+        <label class="uwp-label" for="api-base">API base</label>
+        <input id="api-base" class="uwp-input" type="text" spellcheck="false" placeholder="https://unwindwords.com" />
+
+        <label class="uwp-label" for="token">Personal token</label>
+        <input id="token" class="uwp-input" type="password" spellcheck="false" placeholder="uw_…" autocomplete="off" />
+        <p class="uwp-muted">
+          Used for your own profile and plan. Leave blank to use the free plan anonymously.
+        </p>
+        <p class="uwp-muted">
+          <a id="signin-link" href="https://unwindwords.com/profile" target="_blank" rel="noopener noreferrer"
+            >Sign in to unwindwords.com to get a token</a
+          >
+        </p>
+
+        <label class="uwp-label" for="phon-mode">Phonetic map</label>
+        <select id="phon-mode" class="uwp-input">
+          <option value="off">Off</option>
+          <option value="on_demand">On demand</option>
+          <option value="always">Always</option>
+        </select>
+
+        <label class="uwp-label" for="font-size">Text size</label>
+        <div class="uwp-row">
+          <input id="font-size" type="range" min="14" max="36" step="1" />
+          <span id="font-size-value" class="uwp-muted"></span>
+        </div>
+
+        <label class="uwp-label" for="spacing">Line spacing</label>
+        <select id="spacing" class="uwp-input">
+          <option value="normal">Normal</option>
+          <option value="relaxed">Relaxed</option>
+        </select>
+
+        <button id="save-btn" type="button" class="uwp-btn uwp-btn--wide">Save settings</button>
+        <p id="save-status" class="uwp-muted" role="status" aria-live="polite"></p>
+      </details>
+
+      <p class="uwp-muted uwp-shortcut">Keyboard shortcut: <kbd>Alt</kbd> + <kbd>U</kbd></p>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>
