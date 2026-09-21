@@ -5,7 +5,7 @@ import { MemoryRouter } from 'react-router-dom';
 import Profile from '../pages/Profile';
 import ReadAloudButton from '../components/ReadAloudButton';
 import { MeProvider } from '../useMe';
-import type { ProfileSummary, User } from '../api';
+import type { PlanSummary, ProfileSummary, User } from '../api';
 
 function reply(status: number, body: unknown) {
   return Promise.resolve({
@@ -14,6 +14,14 @@ function reply(status: number, body: unknown) {
     text: () => Promise.resolve(JSON.stringify(body)),
   } as Response);
 }
+
+const FREE_PLAN: PlanSummary = {
+  plan: 'free',
+  pro: false,
+  plan_until: null,
+  cancel_at_period_end: false,
+  manageable: false,
+};
 
 const BASE_USER: User = {
   id: 'u1',
@@ -24,6 +32,7 @@ const BASE_USER: User = {
   has_personal_profile: false,
   phonetic_map: 'on_demand',
   created_at: '2026-09-17T10:00:00Z',
+  plan: FREE_PLAN,
 };
 
 const PROFILE: ProfileSummary = {
@@ -57,7 +66,9 @@ describe('Profile phonetic-map mode selector', () => {
         const body = init?.body ? JSON.parse(String(init.body)) : null;
         calls.push({ url, method, body });
 
-        if (url === '/api/me' && method === 'GET') return reply(200, { user: BASE_USER, profile: PROFILE });
+        if (url === '/api/me' && method === 'GET') {
+          return reply(200, { user: BASE_USER, profile: PROFILE, plan: FREE_PLAN });
+        }
         if (url === '/api/me' && method === 'PATCH') {
           const nextUser = { ...BASE_USER, ...(body as object) };
           return reply(200, { user: nextUser });

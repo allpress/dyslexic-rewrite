@@ -1,4 +1,7 @@
 """FastAPI app: the JSON API from server/API.md plus the built React app from web/dist."""
+# ruff: noqa: I001 -- new feature branches append their own `from . import <module>` line below
+# the original one instead of editing it, to avoid merge conflicts with other concurrent work;
+# ruff's import sorter would otherwise want every such line folded into a single statement.
 
 from __future__ import annotations
 
@@ -19,6 +22,9 @@ from dyslexic_rewrite import __version__
 from dyslexic_rewrite.profile import BUILTIN_PROFILES
 
 from . import auth, battery_items, cache, db, passages, prompts, samples, service, storage
+from . import billing  # Stripe-backed "Pro" tier (billing routes + is_pro/quota); see server/billing.py
+# ^ kept on its own `from . import` line rather than merged into the one above, so a concurrent
+# feature branch appending its own module to that shared line doesn't collide with this one.
 
 app = FastAPI(title="Unwind Words", version=__version__, docs_url=None, redoc_url=None)
 SECURE_COOKIES = os.environ.get("SECURE_COOKIES", "1") == "1"
@@ -70,6 +76,16 @@ async def _value_exc(_: Request, exc: ValueError):
     return JSONResponse({"error": str(exc)}, status_code=400)
 
 
+@app.exception_handler(billing.ProRequiredError)
+async def _pro_required_exc(_: Request, exc: billing.ProRequiredError):
+    # billing.require_pro() raises this with a ready-made {"error": "pro_required", ...} body,
+    # so (unlike the generic HTTPException handler above) it's returned as-is, not re-wrapped.
+    return JSONResponse(exc.detail, status_code=exc.status_code)
+
+
+app.include_router(billing.router)
+
+
 # ---------------------------------------------------------------------------------------
 # auth helpers
 # ---------------------------------------------------------------------------------------
@@ -83,7 +99,7 @@ def _user_json(u: dict) -> dict:
         has = c.execute("SELECT 1 FROM profiles WHERE user_id = %s", (u["id"],)).fetchone() is not None
     return {"id": u["id"], "email": u["email"], "name": u["name"], "base_profile": u["base_profile"],
             "onboarded": u["onboarded"], "has_personal_profile": has, "phonetic_map": u["phonetic_map"],
-            "created_at": u["created_at"].isoformat()}
+            "created_at": u["created_at"].isoformat(), "plan": billing.plan_summary(u)}
 
 
 def current_user(request: Request) -> dict:
@@ -119,7 +135,7 @@ class MePatch(BaseModel):
 
 
 class TextIn(BaseModel):
-    text: str = Field(max_length=60_000)
+    text: str = Field(max_length=200_000)  # Pro's paste limit (billing.PRO_PASTE_CHARS); enforced per-plan below
 
 
 class TriggersIn(BaseModel):
@@ -184,7 +200,8 @@ def me(u: dict = Depends(current_user)):
     p, _ = service.get_profile(u["id"], u["base_profile"])
     with db.conn() as c:
         has = c.execute("SELECT 1 FROM profiles WHERE user_id = %s", (u["id"],)).fetchone() is not None
-    return {"user": _user_json(u), "profile": service.profile_summary(p, u["base_profile"]) if has else None}
+    return {"user": _user_json(u), "profile": service.profile_summary(p, u["base_profile"]) if has else None,
+            "plan": billing.plan_summary(u)}
 
 
 @app.patch("/api/me")
@@ -410,8 +427,9 @@ def rewrite_any(body: TextIn, u: dict | None = Depends(optional_user)):
     text = body.text.strip()
     if not text:
         raise HTTPException(400, "Paste some text first.")
-    if len(text) > 20_000:
-        raise HTTPException(400, "That's a lot at once — try up to 20,000 characters.")
+    limit = billing.quota(u)["paste_chars"]
+    if len(text) > limit:
+        raise HTTPException(400, f"That's a lot at once — try up to {limit:,} characters.")
     profile, _ = service.get_profile(u["id"], u["base_profile"]) if u else (service.load_profile("default"), None)
     mode = u["phonetic_map"] if u else "on_demand"
     segs, stats, phonetic_map, cached = cache.cached_rewrite(text, profile, mode)

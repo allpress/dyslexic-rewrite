@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ApiError,
   deleteMe,
   getLatestBatteryRun,
+  openPortal,
   patchMe,
   postTriggers,
   type BaseProfile,
@@ -22,12 +23,26 @@ const PROFILE_LABELS: Record<BaseProfile, string> = {
 
 export default function Profile() {
   const navigate = useNavigate();
-  const { user, profile, setMe, setProfile } = useMe();
+  const { user, profile, setMe, setProfile, refresh } = useMe();
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [latestBattery, setLatestBattery] = useState<BatteryRun | null | undefined>(undefined);
+  const [portalBusy, setPortalBusy] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [justUpgraded, setJustUpgraded] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get('upgraded') !== '1') return;
+    setJustUpgraded(true);
+    void refresh(); // the checkout webhook may have landed just before this redirect did
+    const next = new URLSearchParams(searchParams);
+    next.delete('upgraded');
+    setSearchParams(next, { replace: true });
+    // Only ever meant to fire once, right after the /profile?upgraded=1 redirect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -87,6 +102,20 @@ export default function Profile() {
     }
   }
 
+  async function manageBilling() {
+    setPortalBusy(true);
+    setError(null);
+    try {
+      const { url } = await openPortal();
+      window.location.href = url;
+    } catch (err) {
+      if (err instanceof ApiError && err.isUnauthorized) return;
+      setError(err instanceof ApiError ? err.message : 'We could not open billing management.');
+    } finally {
+      setPortalBusy(false);
+    }
+  }
+
   async function reallyDelete() {
     setBusy(true);
     setError(null);
@@ -111,6 +140,50 @@ export default function Profile() {
           {error}
         </p>
       )}
+
+      <section className="stack" aria-labelledby="plan-heading">
+        <h2 id="plan-heading">Account & plan</h2>
+        {justUpgraded && (
+          <p className="notice" role="status">
+            Thanks for upgrading to Pro! Your account is all set.
+          </p>
+        )}
+        <div className="card stack">
+          <dl className="facts">
+            <div>
+              <dt>Plan</dt>
+              <dd>{user.plan.pro ? 'Pro' : 'Free'}</dd>
+            </div>
+            {user.plan.plan_until && (
+              <div>
+                <dt>{user.plan.cancel_at_period_end ? 'Ends' : 'Renews'}</dt>
+                <dd>{new Date(user.plan.plan_until).toLocaleDateString()}</dd>
+              </div>
+            )}
+          </dl>
+          {user.plan.pro ? (
+            user.plan.manageable ? (
+              <button className="btn" type="button" onClick={() => void manageBilling()} disabled={portalBusy}>
+                Manage billing
+              </button>
+            ) : (
+              <p className="muted">
+                Pro was set on your account directly, so there is no billing to manage here.
+              </p>
+            )
+          ) : (
+            <div className="stack">
+              <p className="muted">
+                Free includes one book conversion to try, pasting up to 20,000 characters at a
+                time, and everything else on the site.
+              </p>
+              <Link className="btn" to="/pricing">
+                Upgrade to Pro
+              </Link>
+            </div>
+          )}
+        </div>
+      </section>
 
       <section className="stack" aria-labelledby="kind-heading">
         <h2 id="kind-heading">Which sounds most like you?</h2>

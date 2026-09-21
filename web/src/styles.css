@@ -1052,3 +1052,97 @@ input[type='file'] {
   border-bottom: 1px solid var(--line);
   padding-bottom: 8px;
 }
+
+/* ------------------------------------------------------------- pricing (v0.5 billing) */
+
+.plan-toggle {
+  display: inline-flex;
+  gap: 6px;
+  padding: 4px;
+  border: 2px solid var(--line);
+  border-radius: var(--radius);
+  width: fit-content;
+}
+
+.plan-toggle .btn {
+  background: transparent;
+  color: var(--text);
+  border-color: transparent;
+}
+
+.plan-toggle .btn[aria-checked='true'] {
+  background: var(--accent);
+  color: var(--accent-text);
+  border-color: var(--accent);
+  opacity: 1;
+  cursor: default;
+}
+
+.pricing-grid {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  align-items: stretch;
+}
+
+.plan-card {
+  gap: 12px;
+}
+
+.plan-card--pro {
+  border-color: var(--accent);
+}
+
+.plan-card__price {
+  font-size: 2rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.plan-card__interval {
+  font-size: 1rem;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.plan-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 10px;
+  font-size: 0.92rem;
+  line-height: 1.6;
+  flex: 1;
+}
+
+.plan-list li {
+  padding-left: 26px;
+  position: relative;
+}
+
+.plan-list li::before {
+  content: '✓';
+  position: absolute;
+  left: 0;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.faq {
+  display: grid;
+  gap: 18px;
+  max-width: var(--reading);
+  margin: 0;
+}
+
+.faq dt {
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.faq dd {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.7;
+}

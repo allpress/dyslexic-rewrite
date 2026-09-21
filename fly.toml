@@ -11,6 +11,7 @@ primary_region = "ord"
   SECURE_COOKIES = "1"
   DEV_CODE_FALLBACK = "1"   # remove once unwindwords.com is verified in Resend
   AUDIO_DIR = "/data/recordings"
+  PUBLIC_BASE_URL = "https://unwindwords.com"
 
 [mounts]
   source = "audio"

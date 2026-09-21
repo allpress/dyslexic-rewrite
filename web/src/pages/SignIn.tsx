@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ApiError, requestCode, verifyCode } from '../api';
 import { useMe } from '../useMe';
 
@@ -7,7 +7,12 @@ type Step = 'email' | 'code';
 
 export default function SignIn() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { setMe, refresh } = useMe();
+  // Where to go after signing in, e.g. `/signin?next=/pricing` from the "Go Pro" button on
+  // /pricing. Only ever a same-site path -- never follow an absolute or protocol-relative URL.
+  const next = searchParams.get('next');
+  const safeNext = next && next.startsWith('/') && !next.startsWith('//') ? next : null;
 
   const [step, setStep] = useState<Step>('email');
   const [email, setEmail] = useState('');
@@ -40,7 +45,7 @@ export default function SignIn() {
       // The cookie is set now; pull the profile so the rest of the app has it.
       setMe({ user, profile: null });
       void refresh();
-      navigate(user.onboarded ? '/test' : '/onboarding', { replace: true });
+      navigate(safeNext ?? (user.onboarded ? '/test' : '/onboarding'), { replace: true });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'That code did not work. Try again.');
     } finally {

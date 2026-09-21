@@ -19,14 +19,15 @@ Privacy rules the server enforces:
 
 ## Me
 
-`User` = `{id, email, name, base_profile: "default"|"phonological"|"visual"|"attention", onboarded: bool, has_personal_profile: bool, phonetic_map: "off"|"on_demand"|"always", created_at}`
+`User` = `{id, email, name, base_profile: "default"|"phonological"|"visual"|"attention", onboarded: bool, has_personal_profile: bool, phonetic_map: "off"|"on_demand"|"always", created_at, plan: PlanSummary}`
+(`plan` is billing's addition -- see "Billing (v0.5)" below for `PlanSummary`.)
 
 `phonetic_map` is the reader's phonetic-map preference (see v0.3 below). It defaults to `on_demand`
 and lives directly on the user row, the same way `base_profile` does.
 
 | Method | Path | Body | Returns |
 | --- | --- | --- | --- |
-| GET | `/api/me` | — | `{user, profile: ProfileSummary | null}` (401 when signed out) |
+| GET | `/api/me` | — | `{user, profile: ProfileSummary | null, plan: PlanSummary}` (401 when signed out; `plan` is billing's addition, see "Billing (v0.5)") |
 | PATCH | `/api/me` | `{name?, base_profile?, onboarded?, phonetic_map?}` | `{user}` |
 | POST | `/api/me/writing-sample` | `{text}` (>= 150 words) | `{style: StyleReport, profile: ProfileSummary}` |
 | POST | `/api/me/triggers` | `{add?: [word], remove?: [word], safe?: [word]}` | `{profile: ProfileSummary}` |
@@ -66,7 +67,7 @@ profile; which one is rewritten is randomised per test. The reader never sees th
 
 | Method | Path | Body | Returns |
 | --- | --- | --- | --- |
-| POST | `/api/rewrite` | `{text}` (<= 20k chars) | `{segments: [Segment], stats: {sentences, sentences_changed, changes, load_before, load_after}}` — uses the caller's profile when signed in, `default` otherwise; text is not stored |
+| POST | `/api/rewrite` | `{text}` (<= 20k chars free / 200k chars Pro -- `billing.quota(u)["paste_chars"]`, v0.5) | `{segments: [Segment], stats: {sentences, sentences_changed, changes, load_before, load_after}}` — uses the caller's profile when signed in, `default` otherwise; text is not stored |
 | POST | `/api/feedback` | `{tripped: [word], safe?: [word]}` | `{profile: ProfileSummary}` — from the read-anything view, signed in only |
 
 ## Health
@@ -273,3 +274,97 @@ or numeric responses to the project's own stimuli (item ids, one typed word per 
 correctness, timings, Likert answers), kept on purpose so the scoring anchors in
 `dyslexic_rewrite.assess` can be re-checked against real outcomes later (RESEARCH.md section 3.1).
 `DELETE /api/me` removes every `battery_runs` row for that user, like everything else.
+
+---
+
+# Billing (v0.5)
+
+`dyslexic_rewrite` (the rewriting engine) stays MIT-licensed and free to run yourself, forever.
+"Pro" is a convenience the site sells on top of it -- unlimited book conversions, a bigger paste
+limit, and (once it exists) priority use of the higher-quality LLM rewrite tier. There is no
+trial and no time limit on the free tier. All of this lives in `server/billing.py`.
+
+`users.plan` (`"free"` | `"pro"`) and `users.plan_until` are the single source of truth
+`billing.is_pro()` reads: `pro` and (`plan_until` is null or in the future). Nothing else --
+not a live Stripe subscription, not a cached flag -- decides it, so a plan set by hand (see the
+CLI below) behaves identically to one Stripe set through the webhook.
+
+**If `STRIPE_SECRET_KEY` is not set**, every route below except `GET /api/billing/plans` returns
+503 `{"error": "Billing is not set up yet"}`, and `is_pro`/`plan_summary`/`quota` all still work
+off whatever is already in the database -- so gifting Pro to a tester never needs Stripe at all:
+
+```
+python -m server.billing grant EMAIL [--months N]   # N omitted = no expiry, until revoked
+python -m server.billing revoke EMAIL
+```
+
+## Config (env)
+
+| Variable | Purpose |
+| --- | --- |
+| `STRIPE_SECRET_KEY` | Stripe secret key. Unset = billing routes are 503 (see above). |
+| `STRIPE_WEBHOOK_SECRET` | Signing secret for the endpoint added in the Stripe dashboard. |
+| `STRIPE_PRICE_MONTHLY` / `STRIPE_PRICE_YEARLY` | Price ids for the two Pro intervals. |
+| `PUBLIC_BASE_URL` | Used to build Checkout/Portal return URLs. Default `https://unwindwords.com`. |
+| `DYSREWRITE_LLM_BASE_URL` | Already the engine's own LLM-tier switch (`src/dyslexic_rewrite/rewrite/llm.py`); `billing.quota()`'s `llm_tier` is `true` only when this is set *and* the reader is Pro. |
+
+## Routes
+
+| Method | Path | Body | Auth | Returns |
+| --- | --- | --- | --- | --- |
+| GET | `/api/billing/plans` | -- | none | `Plans` -- always 200, even unconfigured |
+| POST | `/api/billing/checkout` | `{interval: "monthly"\|"yearly"}` | signed in | `{url}` -- redirect the browser here |
+| POST | `/api/billing/portal` | -- | signed in | `{url}` -- Stripe Billing Portal session |
+| POST | `/api/billing/webhook` | raw Stripe event + `Stripe-Signature` header | Stripe only | `{ok: true, duplicate?: true}` |
+| GET | `/api/billing/status` | -- | signed in | `PlanSummary` |
+
+`Plans` = `{monthly: PlanPrice, yearly: PlanPrice, configured: bool}`
+`PlanPrice` = `{price_id: string|null, amount: int, currency: string, interval: string}` --
+`amount` is in the smallest currency unit (cents for USD), read straight from the Stripe `Price`
+objects and cached in-process for an hour. Unconfigured (or a failed Stripe call) falls back to
+placeholder amounts (500 / 3900, i.e. $5.00 / $39.00) with `configured: false`, so `/pricing`
+always has something to render.
+
+`PlanSummary` = `{plan: "free"|"pro", pro: bool, plan_until: string|null, cancel_at_period_end: bool,
+manageable: bool}` -- `manageable` is `true` once there's a Stripe customer to open a Portal
+session for (so a Pro plan granted by hand has nothing to "manage" here).
+
+`GET /api/me` gains a `plan: PlanSummary` field, both at the top level and on `user.plan`
+(`User.plan` in `web/src/api.ts`).
+
+`POST /api/billing/checkout` creates or looks up the caller's Stripe customer (by email), then a
+Checkout Session in `mode: "subscription"` with `success_url` =
+`{PUBLIC_BASE_URL}/profile?upgraded=1`, `cancel_url` = `{PUBLIC_BASE_URL}/pricing`,
+`allow_promotion_codes: true`, and `client_reference_id` = the user's id.
+
+`POST /api/billing/webhook` verifies the signature against the raw body, records the Stripe
+event id in `billing_events` before acting on it (a replay of the same id is a no-op), and
+handles: `checkout.session.completed` (associates the Checkout customer with the user who
+started it), `customer.subscription.created`/`.updated` (sets `plan`/`plan_until` and upserts
+`subscriptions`), `customer.subscription.deleted` (back to `free`), `invoice.paid` (extends
+`plan_until`), and `invoice.payment_failed` (marks the subscription `past_due` -- does not itself
+downgrade; the grace period below covers a slow retry, and Stripe's own follow-up
+`customer.subscription.updated` is what actually acts).
+
+`plan_until` is always set to `current_period_end + 3 days` (`billing.GRACE_PERIOD`), so a
+webhook delay or a slow card retry never cuts a paying reader off mid-read.
+
+## Gating (for other modules, e.g. the book library)
+
+```python
+from server import billing
+
+billing.require_pro(user)          # raises HTTP 402 {"error": "pro_required", "message", "upgrade": "/pricing"}
+q = billing.quota(user)             # {"books_total": 1 | None, "paste_chars": 20_000 | 200_000, "llm_tier": bool}
+```
+
+`quota(user)` (`user` may be `None` for an anonymous caller, always free): free is one book ever
+(`books_total: 1`) and a 20,000-character paste limit; Pro is unlimited books (`books_total:
+None`) and 200,000 characters. `POST /api/rewrite` enforces `quota(u)["paste_chars"]` (anonymous
+callers get the free limit).
+
+## Migration
+
+`server/migrations/006_billing.sql` adds `users.plan` / `users.plan_until` /
+`users.stripe_customer_id`, plus `subscriptions` (one row per Stripe subscription) and
+`billing_events` (webhook idempotency, keyed on the Stripe event id).

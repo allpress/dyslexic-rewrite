@@ -4,7 +4,15 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import SignIn from '../pages/SignIn';
 import { MeProvider } from '../useMe';
-import type { User } from '../api';
+import type { PlanSummary, User } from '../api';
+
+const FREE_PLAN: PlanSummary = {
+  plan: 'free',
+  pro: false,
+  plan_until: null,
+  cancel_at_period_end: false,
+  manageable: false,
+};
 
 const USER: User = {
   id: 'u1',
@@ -15,6 +23,7 @@ const USER: User = {
   has_personal_profile: false,
   phonetic_map: 'on_demand',
   created_at: '2026-09-17T10:00:00Z',
+  plan: FREE_PLAN,
 };
 
 function reply(status: number, body: unknown) {

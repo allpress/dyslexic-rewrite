@@ -30,6 +30,9 @@ export default function Nav() {
             <NavLink to="/profile" className="nav__link">
               Profile
             </NavLink>
+            <NavLink to="/pricing" className="nav__link">
+              Pricing
+            </NavLink>
           </>
         ) : (
           <>
@@ -38,6 +41,9 @@ export default function Nav() {
             </NavLink>
             <NavLink to="/assess" className="nav__link">
               Which kind of reader am I?
+            </NavLink>
+            <NavLink to="/pricing" className="nav__link">
+              Pricing
             </NavLink>
             <NavLink to="/signin" className="nav__link">
               Sign in

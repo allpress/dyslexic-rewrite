@@ -24,6 +24,8 @@ export interface User {
   has_personal_profile: boolean;
   phonetic_map: PhoneticMapMode;
   created_at: string;
+  /** Billing (v0.5) -- see PlanSummary below. */
+  plan: PlanSummary;
 }
 
 export interface StyleNumbers {
@@ -194,6 +196,11 @@ export interface SampleResponse extends RewriteResponse {
 export interface MeResponse {
   user: User;
   profile: ProfileSummary | null;
+  /** Same value as `user.plan` -- kept at the top level too since that's how server/API.md
+   * documents `GET /api/me`'s billing addition. Optional here (unlike on `User`) so call sites
+   * that only ever had `{user, profile}` to hand -- after a PATCH, not a fresh GET -- don't need
+   * a `plan` of their own; read `user.plan` instead, which is always present. */
+  plan?: PlanSummary;
 }
 
 export interface FinishBody {
@@ -575,3 +582,47 @@ export const applyBatteryRun = (id: string) =>
   post<{ profile: ProfileSummary }>(`/battery/runs/${encodeURIComponent(id)}/apply`);
 
 export const getLatestBatteryRun = () => request<{ run: BatteryRun | null }>('/battery/latest');
+
+/* ------------------------------------------------------------------ billing (v0.5) */
+// See server/API.md, "Billing (v0.5)". The engine itself stays free and open source;
+// "Pro" is a convenience the site sells on top of it.
+
+export type BillingInterval = 'monthly' | 'yearly';
+
+/** One priced plan as GET /api/billing/plans reports it -- amount is in the smallest unit of
+ * `currency` (e.g. cents for USD), matching Stripe's own Price objects. */
+export interface PlanPrice {
+  price_id: string | null;
+  amount: number;
+  currency: string;
+  interval: string;
+}
+
+export interface PlansResponse {
+  monthly: PlanPrice;
+  yearly: PlanPrice;
+  /** false when Stripe isn't set up yet -- the amounts above are then placeholders. */
+  configured: boolean;
+}
+
+/** The reader's own plan state, from `GET /api/me` (`user.plan`/top-level `plan`) or
+ * `GET /api/billing/status`. */
+export interface PlanSummary {
+  plan: 'free' | 'pro';
+  pro: boolean;
+  plan_until: string | null;
+  cancel_at_period_end: boolean;
+  /** true once there's a Stripe customer to open a billing portal session for. */
+  manageable: boolean;
+}
+
+export const getPlans = () => request<PlansResponse>('/billing/plans');
+
+export const getBillingStatus = () => request<PlanSummary>('/billing/status');
+
+/** Starts a Stripe Checkout session for the given interval and returns its URL to redirect to. */
+export const startCheckout = (interval: BillingInterval) =>
+  post<{ url: string }>('/billing/checkout', { interval });
+
+/** Opens a Stripe Billing Portal session (manage or cancel an existing subscription). */
+export const openPortal = () => post<{ url: string }>('/billing/portal');
