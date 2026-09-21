@@ -178,3 +178,10 @@ def test_learn_from_json_export_keeps_no_content(tmp_path):
     p = learn_profile([text], name="t", report=rep)
     assert "zephyrina" not in p.vocabulary and "doug" not in p.vocabulary
     assert "bookcase" in p.vocabulary
+
+
+def test_semicolon_split_keeps_full_stop_after_flagged_word():
+    p = ReaderProfile(min_zipf=3.5)
+    res = rewrite("First with brooms, then with dusters; then on ladders and steps and chairs, "
+                  "with a brush and a pail of whitewash; till he had dust in his throat.", p)
+    assert "dusters. Then on ladders" in res.text and "whitewash. Till" in res.text

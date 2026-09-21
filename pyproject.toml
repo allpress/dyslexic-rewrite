@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dyslexic-rewrite"
-version = "0.1.0"
+version = "0.2.0"
 description = "Free, open-source tool that rewrites text so dyslexic readers can read it faster — general first, then tuned to the individual."
 readme = "README.md"
 requires-python = ">=3.10"

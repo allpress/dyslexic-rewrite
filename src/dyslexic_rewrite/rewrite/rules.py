@@ -327,6 +327,11 @@ def _fix_breaks(segs: list) -> list:
                     pv.replacement = pv.replacement.rstrip()
                     if not pv.replacement.endswith(('.', '!', '?')):
                         out.append(("text", "."))
+                elif pk == "note":
+                    # a flagged-but-kept word right before the split ("dusters; then") still
+                    # needs the full stop the semicolon became
+                    if not pv.text.endswith(('.', '!', '?')):
+                        out.append(("text", "."))
             out.append((k, v))
             continue
         # capitalise first letter after a break

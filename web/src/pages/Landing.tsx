@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { ApiError, getSample, postNewsletter, type Segment } from '../api';
 
 /** The first paragraph of a sample, as before/after node lists with changed spans marked. */
-function firstParagraph(segments: Segment[]): { before: ReactNode[]; after: ReactNode[] } {
+function firstParagraph(segments: Segment[], original?: string): { before: ReactNode[]; after: ReactNode[] } {
   const before: ReactNode[] = [];
   const after: ReactNode[] = [];
   let key = 0;
@@ -26,7 +26,9 @@ function firstParagraph(segments: Segment[]): { before: ReactNode[]; after: Reac
     }
     key++;
   }
-  return { before, after };
+  // The server sends the untouched paragraph; prefer it, since splits and dropped
+  // punctuation can't be reconstructed from the rewritten segments alone.
+  return { before: original ? [original] : before, after };
 }
 
 export default function Landing() {
@@ -39,7 +41,7 @@ export default function Landing() {
     getSample('wind-in-the-willows')
       .then((res) => {
         if (cancelled) return;
-        const paras = firstParagraph(res.segments);
+        const paras = firstParagraph(res.segments, res.original_first_paragraph);
         setBefore(paras.before);
         setAfter(paras.after);
       })

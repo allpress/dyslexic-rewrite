@@ -188,6 +188,8 @@ export interface SampleInfo {
 }
 
 export interface SampleResponse extends RewriteResponse {
+  /** The untouched first paragraph, for before/after displays. */
+  original_first_paragraph?: string;
   title: string;
   author: string;
   year: number;

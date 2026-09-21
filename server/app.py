@@ -484,6 +484,7 @@ def get_sample(slug: str, u: dict | None = Depends(optional_user)):
     return {
         "segments": segs, "stats": stats, "phonetic_map": phonetic_map, "cached": cached,
         "title": s["title"], "author": s["author"], "year": s["year"], "chapter": s["chapter"],
+        "original_first_paragraph": s["text"].split("\n\n", 1)[0],
         "source": s["source"],
     }
 
