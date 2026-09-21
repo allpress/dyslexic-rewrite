@@ -12,6 +12,7 @@ import {
   type Book,
 } from '../api';
 import { useMe } from '../useMe';
+import FeedbackPrompt from '../components/FeedbackPrompt';
 
 const POLL_MS = 3000;
 
@@ -41,11 +42,25 @@ export default function Library() {
   const [kindleEmailInput, setKindleEmailInput] = useState('');
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  // Tracks each book's last-seen status so a fresh queued/processing -> ready transition (a
+  // conversion finishing) can trigger the one-line "did that read easier?" prompt below —
+  // never for a book that was already ready the first time we saw it.
+  const prevStatuses = useRef<Record<string, Book['status']>>({});
+  const [justReady, setJustReady] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     try {
       const res = await getBooks();
       setBooks(res);
+      const newlyReady = new Set<string>();
+      for (const b of res) {
+        const prev = prevStatuses.current[b.id];
+        if (b.status === 'ready' && prev && prev !== 'ready') newlyReady.add(b.id);
+        prevStatuses.current[b.id] = b.status;
+      }
+      if (newlyReady.size > 0) {
+        setJustReady((current) => new Set([...current, ...newlyReady]));
+      }
     } catch (err) {
       if (err instanceof ApiError && err.isUnauthorized) return;
       setError(err instanceof ApiError ? err.message : 'We could not load your library.');
@@ -237,6 +252,14 @@ export default function Library() {
                 <p className="muted">
                   {b.words.toLocaleString()} words · {b.chapters || '?'} chapters
                 </p>
+
+                {justReady.has(b.id) && (
+                  <FeedbackPrompt
+                    storageKey={`feedback-book-${b.id}`}
+                    context={{ book_id: b.id }}
+                    page="/library"
+                  />
+                )}
 
                 {kindlePromptFor === b.id && (
                   <div className="stack card">

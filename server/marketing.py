@@ -177,11 +177,10 @@ def _guarded_count(c, sql: str) -> int | None:
         return None
 
 
-@router.get("/admin/stats")
-def admin_stats(key: str | None = None):
-    admin_key = os.environ.get("ADMIN_KEY")
-    if not admin_key or key != admin_key:
-        raise HTTPException(404, "Not found.")
+def stats() -> dict:
+    """The body of `GET /api/admin/stats`, pulled out so `server/feedback.py`'s
+    `GET /api/admin/export` (v0.6) can fold the same numbers into its "pulse" bundle without
+    another admin-key check or another HTTP round trip."""
     with db.conn() as c:
         signups = c.execute("SELECT COUNT(*) AS n FROM newsletter_signups").fetchone()["n"]
         views = c.execute(
@@ -199,3 +198,11 @@ def admin_stats(key: str | None = None):
         "books": books,
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
+
+
+@router.get("/admin/stats")
+def admin_stats(key: str | None = None):
+    admin_key = os.environ.get("ADMIN_KEY")
+    if not admin_key or key != admin_key:
+        raise HTTPException(404, "Not found.")
+    return stats()

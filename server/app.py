@@ -36,6 +36,8 @@ from . import (
     service,
     storage,
 )
+from . import feedback as feedback_module  # v0.6 user feedback; aliased so it doesn't shadow the
+# `feedback` route function below (see server/API.md, "Feedback (v0.6)").
 
 app = FastAPI(title="Unwind Words", version=__version__, docs_url=None, redoc_url=None)
 SECURE_COOKIES = os.environ.get("SECURE_COOKIES", "1") == "1"
@@ -462,6 +464,9 @@ def rewrite_any(body: TextIn, u: dict | None = Depends(optional_user)):
 @app.post("/api/feedback")
 def feedback(body: FeedbackIn, u: dict = Depends(current_user)):
     p = service.update_triggers(u["id"], u["base_profile"], add=body.tripped, safe=body.safe)
+    # Also files a `kind='tripped'` row in the v0.6 feedback table so these reports show up in
+    # the weekly digest alongside the floating widget's bug/idea/praise/question submissions.
+    feedback_module.record_tripped(u, body.tripped, body.safe)
     return {"profile": service.profile_summary(p, u["base_profile"])}
 
 
@@ -814,6 +819,7 @@ def delete_book(book_id: int, u: dict = Depends(current_user)):
 # ---------------------------------------------------------------------------------------
 app.include_router(marketing.router)
 app.include_router(books.router)
+app.include_router(feedback_module.router)
 
 
 # ---------------------------------------------------------------------------------------

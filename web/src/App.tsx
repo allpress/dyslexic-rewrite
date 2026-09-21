@@ -21,6 +21,7 @@ import Terms from './pages/Terms';
 import About from './pages/About';
 import NotFound from './pages/NotFound';
 import Pricing from './pages/Pricing';
+import FeedbackWidget from './components/FeedbackWidget';
 
 export default function App() {
   const navigate = useNavigate();
@@ -114,6 +115,7 @@ export default function App() {
         />
         <Route path="*" element={<NotFound />} />
       </Routes>
+      <FeedbackWidget />
       <footer className="footer">
         <p style={{ margin: 0, maxWidth: 'none' }}>
           Free and open source.{' '}

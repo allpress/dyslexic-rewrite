@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ApiError, getResults, type ResultsResponse } from '../api';
 import { asPercent, totalsVerdict } from '../lib/verdict';
+import FeedbackPrompt from '../components/FeedbackPrompt';
 
 function Bar({ label, value, max, alt }: { label: string; value: number; max: number; alt?: boolean }) {
   const pct = max > 0 ? Math.round((value / max) * 100) : 0;
@@ -105,7 +106,7 @@ export default function Results() {
           <p className="muted">None yet.</p>
         ) : (
           <ul className="test-list">
-            {data.tests.map((t) => (
+            {data.tests.map((t, index) => (
               <li className="card" key={t.id}>
                 <p className="progress" style={{ margin: 0 }}>
                   {new Date(t.created_at).toLocaleDateString()}
@@ -123,6 +124,13 @@ export default function Results() {
                     </div>
                   ))}
                 </dl>
+                {index === 0 && t.completed && (
+                  <FeedbackPrompt
+                    storageKey={`feedback-test-${t.id}`}
+                    context={{ test_id: t.id, pair: t.pair }}
+                    page="/results"
+                  />
+                )}
               </li>
             ))}
           </ul>
