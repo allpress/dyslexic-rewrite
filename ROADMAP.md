@@ -44,8 +44,8 @@ Research and the full test/converter plan: [docs/RESEARCH.md](docs/RESEARCH.md).
 - [x] Text-to-speech button in the reader (strongest-evidenced accommodation in the literature)
 - [x] Phonetic map: friendly respellings (`WYND` / `WIND`, `in-TEN-shun`) over trigger words, off / on demand / always, in the CLI reader and on the site; the A/B test records the mode so it can be measured as its own lever
 - [ ] `annotate_instead_of_replace` profile flag (Rello's "simplify or help?" finding)
-- [ ] Documented cheap hosted tier: DeepSeek `deepseek-flash` behind the fidelity gate (~$0.10 per book), cost estimate printed before a whole-book run
-- [ ] Layout controls per profile: chunking, syllable breaks, line length, colour (comfort only — no overlay/font claims)
+- [x] Cheap hosted tier: DeepSeek `deepseek-flash` behind the fidelity gate v2, concurrent, paragraph-cached, per-book cost shown; `dysrewrite llm-check`
+- [x] Layout controls per profile: fonts, spacing, line length, colour themes, ruler, spotlight (comfort only — no overlay/font claims)
 - [ ] Done when: the axis profile from the battery predicts which rewrite lever produced a reader's speed gain, across at least six readers × six passage pairs
 
 ## Phase 3 — Individual tuning
@@ -61,13 +61,14 @@ Outcome: a profile learned from the reader's own writing and speech that beats t
 
 ## Phase 4 — Measurement and community
 
+- [x] Feedback widget + weekly rollup skill that turns feedback into fixes (`.claude/skills/feedback-rollup`)
+- [x] Launch playbook and assets (docs/PLAYBOOK.md, docs/launch/)
 - [x] Pro plan (Stripe), library with EPUB in/out and send-to-Kindle, SEO book pages, newsletter, legal pages — the micro-SaaS layer (docs/BUSINESS.md)
-
 - [x] Built-in A/B reading test on the site: matched passage pairs, original vs rewritten, timer + 5 questions
 - [x] Sample books on /read (Gutenberg excerpts) with a Postgres rewrite cache so nothing is regenerated twice
 - [ ] Opt-in anonymised result sharing so the project can publish what actually helps
-- [ ] Browser extension that rewrites the page you are on
-- [ ] E-reader export (EPUB/Kindle) and a simple web UI
+- [x] Browser extension that rewrites the page you are on (`extension/`, unpublished until Doug submits it)
+- [x] E-reader export (EPUB/Kindle) and the web UI
 - [ ] Language packs (Spanish first — the largest body of dyslexia + simplification research is in Spanish)
 - [ ] Done when: published results and external contributors merging PRs
 

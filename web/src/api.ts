@@ -760,7 +760,7 @@ export function trackPageView(path: string): void {
 
 /** Bumped by hand alongside meaningful releases; sent as feedback context so reports can be
  * told apart across versions. Matches web/package.json's own version. */
-export const APP_VERSION = '0.1.0';
+export const APP_VERSION = '0.6.0';
 
 export type FeedbackKind = 'bug' | 'idea' | 'praise' | 'question';
 export type FeedbackStatus = 'new' | 'triaged' | 'planned' | 'done' | 'wontfix';

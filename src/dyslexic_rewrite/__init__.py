@@ -8,5 +8,5 @@ from .analyze import analyze
 from .profile import ReaderProfile, load_profile
 from .rewrite.engine import rewrite
 
-__version__ = "0.2.0"
+__version__ = "0.6.0"
 __all__ = ["ReaderProfile", "load_profile", "analyze", "rewrite", "__version__"]
