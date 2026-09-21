@@ -575,3 +575,18 @@ export const applyBatteryRun = (id: string) =>
   post<{ profile: ProfileSummary }>(`/battery/runs/${encodeURIComponent(id)}/apply`);
 
 export const getLatestBatteryRun = () => request<{ run: BatteryRun | null }>('/battery/latest');
+
+/* ------------------------------------------------------------ marketing */
+
+/** POST /api/newsletter — email capture on the landing page. `source` is a short free-text tag
+ * (e.g. "landing", "footer") so signups can be told apart later; never required. */
+export const postNewsletter = (body: { email: string; source?: string }) =>
+  post<{ ok: true }>('/newsletter', body);
+
+/**
+ * POST /api/track — a cookie-free page-view ping, fired once per route change. Failures are
+ * swallowed: a dropped tracking call must never surface as an error to the reader.
+ */
+export function trackPageView(path: string): void {
+  post<{ ok: true }>('/track', { path }).catch(() => {});
+}

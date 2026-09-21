@@ -1,8 +1,10 @@
 import { useEffect } from 'react';
 import { Route, Routes, useNavigate } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import Nav from './components/Nav';
 import RequireAuth from './components/RequireAuth';
 import { setUnauthorizedHandler } from './api';
+import { trackPageView } from './api';
 import Landing from './pages/Landing';
 import SignIn from './pages/SignIn';
 import Onboarding from './pages/Onboarding';
@@ -12,6 +14,9 @@ import ReadAnything from './pages/Read';
 import Record from './pages/Record';
 import Profile from './pages/Profile';
 import Assess from './pages/Assess';
+import Privacy from './pages/Privacy';
+import Terms from './pages/Terms';
+import About from './pages/About';
 import NotFound from './pages/NotFound';
 
 export default function App() {
@@ -26,6 +31,12 @@ export default function App() {
     });
     return () => setUnauthorizedHandler(null);
   }, [navigate]);
+
+  // Cookie-free page-view ping (server/API.md v0.5) — one per route change, best-effort.
+  const location = useLocation();
+  useEffect(() => {
+    trackPageView(location.pathname);
+  }, [location.pathname]);
 
   return (
     <div className="shell">
@@ -62,6 +73,9 @@ export default function App() {
         />
         <Route path="/read" element={<ReadAnything />} />
         <Route path="/assess" element={<Assess />} />
+        <Route path="/privacy" element={<Privacy />} />
+        <Route path="/terms" element={<Terms />} />
+        <Route path="/about" element={<About />} />
         <Route
           path="/record"
           element={
@@ -84,6 +98,14 @@ export default function App() {
         <p style={{ margin: 0, maxWidth: 'none' }}>
           Free and open source.{' '}
           <a href="https://github.com/allpress/dyslexic-rewrite">Code on GitHub</a>
+        </p>
+        <p className="muted" style={{ margin: '10px 0 0', maxWidth: 'none' }}>
+          <Link to="/about">About</Link> · <Link to="/privacy">Privacy</Link> ·{' '}
+          <Link to="/terms">Terms</Link> ·{' '}
+          <a href="mailto:hello@unwindwords.com">hello@unwindwords.com</a>
+        </p>
+        <p className="muted" style={{ margin: '6px 0 0', maxWidth: 'none' }}>
+          Made for Jennifer.
         </p>
       </footer>
     </div>

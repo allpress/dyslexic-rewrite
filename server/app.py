@@ -18,7 +18,19 @@ from pydantic import BaseModel, Field
 from dyslexic_rewrite import __version__
 from dyslexic_rewrite.profile import BUILTIN_PROFILES
 
-from . import auth, battery_items, cache, db, passages, prompts, samples, service, storage
+from . import (
+    auth,
+    battery_items,
+    books,
+    cache,
+    db,
+    marketing,
+    passages,
+    prompts,
+    samples,
+    service,
+    storage,
+)
 
 app = FastAPI(title="Unwind Words", version=__version__, docs_url=None, redoc_url=None)
 SECURE_COOKIES = os.environ.get("SECURE_COOKIES", "1") == "1"
@@ -660,6 +672,17 @@ def latest_battery_run(u: dict = Depends(current_user)):
             "ORDER BY finished_at DESC LIMIT 1", (u["id"],),
         ).fetchone()
     return {"run": _battery_run_json(r) if r else None}
+
+
+# ---------------------------------------------------------------------------------------
+# marketing (v0.5): newsletter, page-view counter, admin stats -- JSON, under /api
+# server-rendered SEO book pages, sitemap.xml, robots.txt -- real HTML, not the SPA
+#
+# Registered here, before the static mount and the SPA catch-all below, so neither shadows
+# these paths (FastAPI matches routes in registration order).
+# ---------------------------------------------------------------------------------------
+app.include_router(marketing.router)
+app.include_router(books.router)
 
 
 # ---------------------------------------------------------------------------------------
