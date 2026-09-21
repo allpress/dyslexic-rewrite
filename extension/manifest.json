@@ -1,0 +1,38 @@
+{
+  "manifest_version": 3,
+  "name": "Unwind this page",
+  "short_name": "Unwind Words",
+  "description": "Turns any article into a dyslexia-friendly reader, rewritten by Unwind Words — underlined changes, a phonetic map, read-aloud and a reading ruler.",
+  "version": "0.1.0",
+  "icons": {
+    "16": "icons/16.png",
+    "48": "icons/48.png",
+    "128": "icons/128.png"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Unwind this page",
+    "default_icon": {
+      "16": "icons/16.png",
+      "48": "icons/48.png",
+      "128": "icons/128.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": ["activeTab", "scripting", "storage"],
+  "optional_host_permissions": ["https://unwindwords.com/*"],
+  "commands": {
+    "unwind-page": {
+      "suggested_key": { "default": "Alt+U", "mac": "Alt+U" },
+      "description": "Unwind this page"
+    }
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "unwind-this-page@unwindwords.com",
+      "strict_min_version": "115.0"
+    }
+  }
+}

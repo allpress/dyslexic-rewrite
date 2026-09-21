@@ -1,0 +1,143 @@
+/* Popup — tokens mirror web/src/styles.css. */
+
+:root {
+  --bg: #fbf8f1;
+  --surface: #ffffff;
+  --text: #1f2328;
+  --muted: #55606b;
+  --line: #ded5c2;
+  --accent: #1c5d4a;
+  --accent-text: #ffffff;
+  --accent-soft: #e2efe9;
+  --focus: #b8541f;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14171a;
+    --surface: #1d2126;
+    --text: #e8e4dc;
+    --muted: #a8b0b8;
+    --line: #38404a;
+    --accent: #6fd3b0;
+    --accent-text: #10221c;
+    --accent-soft: #1f3b33;
+    --focus: #ffb26b;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  width: 320px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Atkinson Hyperlegible', Verdana, Arial, sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.uwp {
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.uwp__title {
+  font-size: 1.1rem;
+  margin: 0;
+}
+
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.uwp-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 8px 16px;
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.uwp-btn--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+.uwp-btn--wide {
+  width: 100%;
+}
+
+.uwp-muted {
+  color: var(--muted);
+  font-size: 0.8rem;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.uwp-settings {
+  border-top: 2px solid var(--line);
+  padding-top: 10px;
+}
+
+.uwp-settings summary {
+  cursor: pointer;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.uwp-label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 700;
+  margin: 10px 0 4px;
+}
+
+.uwp-input {
+  width: 100%;
+  min-height: 36px;
+  padding: 6px 10px;
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 2px solid var(--line);
+  border-radius: 8px;
+}
+
+.uwp-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.uwp-row input[type='range'] {
+  flex: 1;
+}
+
+.uwp-shortcut {
+  text-align: center;
+}
+
+a {
+  color: var(--accent);
+}
+
+kbd {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 0.85em;
+}

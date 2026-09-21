@@ -788,3 +788,29 @@ export interface MyFeedbackItem {
 
 /** GET /api/feedback/mine — the signed-in reader's own submissions, newest first. */
 export const getMyFeedback = () => request<MyFeedbackItem[]>('/feedback/mine');
+
+/* ------------------------------------------------------------ API tokens (v0.6) */
+// See server/API.md, "API tokens (v0.6)". Personal tokens for the "Unwind this page" browser
+// extension: `Authorization: Bearer uw_...` authenticates like the session cookie.
+
+export interface ApiToken {
+  id: string;
+  name: string;
+  /** First 10 characters after the `uw_` marker, kept in the clear to tell tokens apart. */
+  prefix: string;
+  created_at: string;
+  last_used_at: string | null;
+  revoked_at: string | null;
+}
+
+/** Only the create response ever carries the plaintext token — shown exactly once. */
+export interface ApiTokenCreated extends ApiToken {
+  token: string;
+}
+
+export const getApiTokens = () => request<ApiToken[]>('/me/tokens');
+
+export const createApiToken = (name: string) => post<ApiTokenCreated>('/me/tokens', { name });
+
+export const revokeApiToken = (id: string) =>
+  request<{ ok: true }>(`/me/tokens/${encodeURIComponent(id)}`, { method: 'DELETE' });

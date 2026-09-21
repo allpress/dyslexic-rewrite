@@ -1,0 +1,28 @@
+{
+  "name": "unwind-this-page",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Unwind Words browser extension — turns any article into our dyslexia-friendly reader.",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "icons": "node scripts/generate-icons.mjs",
+    "zip": "npm run build && node scripts/zip.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@mozilla/readability": "^0.5.0"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.271",
+    "@types/node": "^22.7.4",
+    "archiver": "^7.0.1",
+    "esbuild": "^0.23.1",
+    "jsdom": "^25.0.1",
+    "pngjs": "^7.0.0",
+    "typescript": "^5.6.2",
+    "vitest": "^2.1.2"
+  }
+}

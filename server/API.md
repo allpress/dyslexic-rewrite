@@ -626,3 +626,47 @@ page, context, status, tags, admin_note, created_at, updated_at)` with an index 
 `(status, created_at)`. `user_id` is `ON DELETE SET NULL` (not `CASCADE`, unlike most other
 tables): deleting an account detaches its feedback from who sent it but keeps the feedback itself,
 since that is exactly the record the weekly rollup needs.
+
+# API tokens (v0.6)
+
+Personal API tokens, so the "Unwind this page" browser extension (and anything else acting on a
+reader's behalf outside a browser tab with their session cookie) can call the API as that reader
+without a cookie. A token authenticates exactly like the `session` cookie -- signed-in-ness,
+`base_profile`, `phonetic_map`, Pro limits, all of it -- via `Authorization: Bearer uw_...` on any
+request. Every route documented elsewhere in this file that accepts the session cookie (via
+`current_user`/`optional_user` in `server/app.py`) accepts a bearer token exactly the same way,
+the header is simply checked first and the cookie is the fallback. `POST /api/rewrite` in
+particular works two ways for the extension: anonymous (free-tier quota, `default` profile) or
+with a token (the reader's own profile and Pro limits).
+
+Tokens are shown in full exactly once, at creation. Only a SHA-256 hash is ever stored; a 10-char
+`prefix` is kept in the clear so the list view can tell tokens apart without ever re-displaying
+the secret. A token has no expiry -- it is valid until revoked.
+
+| Method | Path | Body | Returns |
+| --- | --- | --- | --- |
+| POST | `/api/me/tokens` | `{name}` | `ApiToken & {token: string}` (201) -- `token` (`uw_` + 40 URL-safe characters) is returned only this once |
+| GET | `/api/me/tokens` | -- | `[ApiToken]`, newest first |
+| DELETE | `/api/me/tokens/{id}` | -- | `{ok: true}` (revokes; 404 for an unknown or already-revoked id) |
+
+`ApiToken` = `{id, name, prefix, created_at, last_used_at: string|null, revoked_at: string|null}`
+(never includes `token` except on the create response). `last_used_at` updates on every
+successful bearer-auth request with that token.
+
+All three routes require sign-in (cookie **or** an existing bearer token) -- a token can revoke
+another token belonging to the same account, but tokens are always scoped to the account that
+created them.
+
+## CORS
+
+`/api/*` allows cross-origin requests from `chrome-extension://*` and `moz-extension://*` origins
+(via `CORSMiddleware`'s `allow_origin_regex`, not a fixed allow-list, since every install of the
+extension gets its own generated extension id), with the `Authorization` and `Content-Type`
+request headers and every method. `allow_credentials` is `False` for these origins: the extension
+never sends the `session` cookie cross-origin, it authenticates with a bearer token instead, so
+there is nothing here for a hostile page to ride on.
+
+## Migration
+
+`server/migrations/012_api_tokens.sql` adds `api_tokens (id, user_id, name, token_hash, prefix,
+created_at, last_used_at, revoked_at)`, unique on `token_hash`, `user_id ON DELETE CASCADE`.
