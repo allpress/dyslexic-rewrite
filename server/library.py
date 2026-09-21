@@ -59,7 +59,9 @@ BOOKS_DIR = Path(os.environ.get("BOOKS_DIR", "./data/books")).resolve()
 MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 MAX_WORDS_HARD = 300_000     # nobody, Pro included, can upload more than this
 MAX_WORDS_FREE = 60_000      # free readers are capped lower
-SOURCE_KINDS = ("epub", "txt", "md")
+# .pdf/.docx (v0.6, Helperbird parity) added alongside the original three; migration
+# 011_import_dictionary_summaries.sql relaxes the matching `books.source_kind` CHECK constraint.
+SOURCE_KINDS = ("epub", "txt", "md", "pdf", "docx")
 
 _UNSAFE_FS_CHARS = re.compile(r"[^A-Za-z0-9 ._-]+")
 
@@ -146,7 +148,7 @@ def create_book(user: dict, filename: str, data: bytes, title: str | None, autho
     """Validate, save, and queue a new upload. Raises HTTPException(400|402) on any rejection."""
     kind = _source_kind(filename or "")
     if kind is None:
-        raise HTTPException(400, "Upload a .epub, .txt, or .md file.")
+        raise HTTPException(400, "Upload a .epub, .txt, .md, .pdf, or .docx file.")
     if not data:
         raise HTTPException(400, "That file came through empty.")
     if len(data) > MAX_UPLOAD_BYTES:

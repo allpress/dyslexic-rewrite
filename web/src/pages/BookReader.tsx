@@ -1,9 +1,20 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import Reader, { paragraphTexts } from '../components/Reader';
 import ReadAloudButton from '../components/ReadAloudButton';
 import PhoneticModeSelect from '../components/PhoneticModeSelect';
-import { ApiError, getBook, getBookChapter, patchMe, type Book, type BookChapterResponse, type PhoneticMapMode } from '../api';
+import DefineChip from '../components/DefineChip';
+import SummaryPanel from '../components/SummaryPanel';
+import {
+  ApiError,
+  getBook,
+  getBookChapter,
+  patchMe,
+  summariseBookChapter,
+  type Book,
+  type BookChapterResponse,
+  type PhoneticMapMode,
+} from '../api';
 import { useMe } from '../useMe';
 
 function lastChapterKey(id: string): string {
@@ -39,6 +50,7 @@ export default function BookReader() {
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [phoneticMapMode, setPhoneticMapMode] = useState<PhoneticMapMode>(user?.phonetic_map ?? 'on_demand');
+  const readerContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (user) setPhoneticMapMode(user.phonetic_map);
@@ -168,13 +180,23 @@ export default function BookReader() {
             </button>
           </div>
 
-          <Reader
-            segments={data.segments}
-            showMarks
-            tripped={tripped}
-            onToggleWord={toggleWord}
-            phoneticMap={data.phonetic_map}
-            phoneticMapMode={phoneticMapMode}
+          <div ref={readerContainerRef}>
+            <Reader
+              segments={data.segments}
+              showMarks
+              tripped={tripped}
+              onToggleWord={toggleWord}
+              phoneticMap={data.phonetic_map}
+              phoneticMapMode={phoneticMapMode}
+            />
+          </div>
+          {/* Select any single word above (including a marked one) to define it -- v0.6. */}
+          <DefineChip containerRef={readerContainerRef} />
+
+          <SummaryPanel
+            key={chapter}
+            isPro={!!user?.plan.pro}
+            fetchSummary={() => summariseBookChapter(id, chapter)}
           />
         </>
       )}

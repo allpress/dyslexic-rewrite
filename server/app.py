@@ -38,6 +38,9 @@ from . import (
 )
 from . import feedback as feedback_module  # v0.6 user feedback; aliased so it doesn't shadow the
 # `feedback` route function below (see server/API.md, "Feedback (v0.6)").
+from . import importer  # v0.6 import from a web page (server/API.md, "Import (v0.6)")
+from . import dictionary  # v0.6 dictionary on tap (server/API.md, "Dictionary (v0.6)")
+from . import summaries  # v0.6 AI summaries, Pro only (server/API.md, "Summaries (v0.6)")
 
 app = FastAPI(title="Unwind Words", version=__version__, docs_url=None, redoc_url=None)
 SECURE_COOKIES = os.environ.get("SECURE_COOKIES", "1") == "1"
@@ -820,6 +823,9 @@ def delete_book(book_id: int, u: dict = Depends(current_user)):
 app.include_router(marketing.router)
 app.include_router(books.router)
 app.include_router(feedback_module.router)
+app.include_router(importer.router)
+app.include_router(dictionary.router)
+app.include_router(summaries.router)
 
 
 # ---------------------------------------------------------------------------------------

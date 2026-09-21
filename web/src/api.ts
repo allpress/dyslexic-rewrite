@@ -636,7 +636,8 @@ export const openPortal = () => post<{ url: string }>('/billing/portal');
 // site or send it to a Kindle.
 
 export type BookStatus = 'queued' | 'processing' | 'ready' | 'failed';
-export type BookSourceKind = 'epub' | 'txt' | 'md';
+/** 'pdf'/'docx' added in v0.6 (Helperbird parity) — see server/API.md, "Your library". */
+export type BookSourceKind = 'epub' | 'txt' | 'md' | 'pdf' | 'docx';
 export type BookEngine = 'rules' | 'llm';
 
 export interface Book {
@@ -788,3 +789,59 @@ export interface MyFeedbackItem {
 
 /** GET /api/feedback/mine — the signed-in reader's own submissions, newest first. */
 export const getMyFeedback = () => request<MyFeedbackItem[]>('/feedback/mine');
+
+/* ------------------------------------------------------ import from a web page (v0.6) */
+// See server/API.md, "Import (v0.6)". Anonymous allowed, subject to the same paste_chars
+// quota as POST /api/rewrite; an over-quota article comes back truncated with a `note`.
+
+export interface ImportUrlResponse {
+  title: string | null;
+  byline: string | null;
+  text: string;
+  words: number;
+  source_url: string;
+  /** Set when the article was cut off to fit the caller's paste-quota limit. */
+  note: string | null;
+}
+
+export const importUrl = (url: string) => post<ImportUrlResponse>('/import/url', { url });
+
+/* ------------------------------------------------------------ dictionary on tap (v0.6) */
+// See server/API.md, "Dictionary (v0.6)". Anonymous allowed, rate-limited server-side.
+
+export interface DictionaryMeaning {
+  pos: string;
+  definition: string;
+  example: string | null;
+}
+
+export interface DefinitionResponse {
+  word: string;
+  phonetic: string | null;
+  meanings: DictionaryMeaning[];
+  audio_url: string | null;
+}
+
+export const defineWord = (word: string) =>
+  request<DefinitionResponse>(`/define?word=${encodeURIComponent(word)}`);
+
+/* ------------------------------------------------------------------- AI summaries (v0.6, Pro) */
+// See server/API.md, "Summaries (v0.6)". Gated by billing.require_pro; 503 when the server has
+// no LLM configured at all.
+
+export interface SummaryResponse {
+  bullets: string[];
+  summary: string;
+}
+
+export const summariseText = (text: string) => post<SummaryResponse>('/summaries', { text });
+
+export interface BookChapterSummaryResponse extends SummaryResponse {
+  chapter: number;
+  title: string;
+}
+
+export const summariseBookChapter = (bookId: string, chapter: number) =>
+  post<BookChapterSummaryResponse>(
+    `/books/${encodeURIComponent(bookId)}/summary?chapter=${encodeURIComponent(chapter)}`,
+  );

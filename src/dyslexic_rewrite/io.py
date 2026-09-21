@@ -224,11 +224,74 @@ def _read_epub_chapters(path: Path) -> list[dict[str, str]]:
     return chapters
 
 
+def _read_pdf_chapters(path: Path) -> list[dict[str, str]]:
+    """`.pdf`: extract each page's text with `pypdf` and split it the same way `.txt` is split
+    (Markdown-style headings never appear in a PDF's extracted text, so this only ever tries the
+    "Chapter N" line pattern, then falls back to ~8,000-word chunks). A PDF with no extractable
+    text at all -- a straight image scan -- raises a `ValueError` with a clear message, since
+    OCR is out of scope here."""
+    try:
+        from pypdf import PdfReader
+    except ImportError as e:  # pragma: no cover
+        raise SystemExit("PDF input needs pypdf: pip install 'dyslexic-rewrite[docs]'") from e
+    reader = PdfReader(str(path))
+    pages = []
+    for page in reader.pages:
+        try:
+            pages.append(page.extract_text() or "")
+        except Exception:  # a single malformed page must not sink the whole import
+            pages.append("")
+    raw = "\n\n".join(pages)
+    if not raw.strip():
+        raise ValueError("This PDF is a scan — OCR isn't supported yet.")
+    return _split_text_chapters(raw, is_md=False)
+
+
+def _read_docx_chapters(path: Path) -> list[dict[str, str]]:
+    """`.docx`: a paragraph styled "Heading *" starts a new chapter, titled from that heading's
+    text; everything before the first heading (if any) becomes "Chapter 1". A document with no
+    headings at all is treated like a headingless `.txt` file -- one chapter, chunked into
+    ~8,000-word pieces if it's long."""
+    try:
+        import docx
+    except ImportError as e:  # pragma: no cover
+        raise SystemExit("DOCX input needs python-docx: pip install 'dyslexic-rewrite[docs]'") from e
+    document = docx.Document(str(path))
+    sections: list[tuple[str | None, list[str]]] = [(None, [])]
+    any_heading = False
+    for para in document.paragraphs:
+        style_name = (para.style.name if para.style else "") or ""
+        text = para.text.strip()
+        if not text:
+            continue
+        if style_name.lower().startswith("heading"):
+            any_heading = True
+            sections.append((text, []))
+        else:
+            sections[-1][1].append(text)
+
+    if not any_heading:
+        whole = _normalise("\n\n".join(p for _, paras in sections for p in paras))
+        return _chunk_chapter(whole)
+
+    chapters = []
+    for title, paras in sections:
+        text = _normalise("\n\n".join(paras))
+        if text.strip():
+            chapters.append({"title": title or f"Chapter {len(chapters) + 1}", "text": text})
+    return chapters
+
+
 def read_chapters(path: str | Path) -> list[dict[str, str]]:
     """Split a book into `[{"title": str, "text": str}, ...]`, one entry per chapter.
 
     `.epub`: walks the spine in order, one chapter per spine document, titled from its
     first `<h1>`/`<h2>`/`<h3>` (falling back to "Chapter N").
+
+    `.pdf`: extracts text per page with `pypdf`, then splits like `.txt` below. Raises
+    `ValueError` if the PDF has no extractable text (a scan -- OCR is out of scope).
+
+    `.docx`: paragraphs styled "Heading *" split it into chapters, titled from the heading text.
 
     `.txt`/`.md`: splits on Markdown headings (`.md` only) or lines like "Chapter 3" /
     "CHAPTER III"; if neither pattern is found, the whole file is one chapter, further cut
@@ -239,6 +302,10 @@ def read_chapters(path: str | Path) -> list[dict[str, str]]:
     suffix = path.suffix.lower()
     if suffix == ".epub":
         return _read_epub_chapters(path)
+    if suffix == ".pdf":
+        return _read_pdf_chapters(path)
+    if suffix == ".docx":
+        return _read_docx_chapters(path)
     raw = path.read_text(encoding="utf-8", errors="replace")
     return _split_text_chapters(raw, is_md=(suffix == ".md"))
 
